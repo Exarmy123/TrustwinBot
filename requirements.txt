@@ -1,12 +1,4 @@
-python-telegram-bot==13.15
-Flask
-flask
-python-dotenv
-pyTelegramBotAPI
-supabase-py
+python-telegram-bot
+supabase
 requests
-flask
 python-dotenv
-pyTelegramBotAPI
-supabase-py
-requests
