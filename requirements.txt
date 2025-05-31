@@ -1,4 +1,4 @@
-python-telegram-bot
 supabase
+python-telegram-bot
 requests
 python-dotenv
