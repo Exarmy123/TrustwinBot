@@ -5,3 +5,8 @@ python-dotenv
 pyTelegramBotAPI
 supabase-py
 requests
+flask
+python-dotenv
+pyTelegramBotAPI
+supabase-py
+requests
