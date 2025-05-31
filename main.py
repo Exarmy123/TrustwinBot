@@ -1,13 +1,9 @@
-# TrustWin Lottery Bot - FINAL PRODUCTION-READY CODE
-
 import os
 import asyncio
 import random
 import datetime
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.utils import executor
 from supabase import create_client
 from tronpy import Tron
 from tronpy.keys import PrivateKey
@@ -48,7 +44,9 @@ async def start(msg: types.Message):
         supabase.table("users").insert({"user_id": user_id, "username": username, "referred_by": ref}).execute()
 
     await msg.reply(
-        f"🎉 Welcome to TrustWin Lottery!\n🎟️ Each ticket costs {TICKET_PRICE}$ (USDT TRC20).\nUse /buy to purchase tickets."
+        f"🎉 Welcome to TrustWin Lottery!\n"
+        f"🎟️ Each ticket costs {TICKET_PRICE}$ (USDT TRC20).\n"
+        "Use /buy to purchase tickets."
     )
 
 # --- Buy Ticket ---
@@ -56,11 +54,10 @@ async def start(msg: types.Message):
 async def buy(msg: types.Message):
     user_id = msg.from_user.id
     await msg.reply(
-        f"💰 Send exactly {TICKET_PRICE}$ in USDT (TRC20) to:\n
-🔐 Wallet Address:
-`{admin_wallet}`
-
-📩 After sending, use /confirm to proceed.",
+        f"💰 Send exactly {TICKET_PRICE}$ in USDT (TRC20) to:\n"
+        f"🔐 Wallet Address:\n"
+        f"`{admin_wallet}`\n\n"
+        "📩 After sending, use /confirm to proceed.",
         parse_mode="Markdown"
     )
 
@@ -90,7 +87,7 @@ async def admin_confirm(msg: types.Message):
             supabase.table("transactions").insert({"user_id": ref_id, "amount": REFERRAL_COMMISSION, "status": "referral"}).execute()
 
         await msg.reply("✅ Ticket issued and referral rewarded.")
-    except:
+    except Exception:
         await msg.reply("❗ Usage: /admin_confirm <user_id>")
 
 # --- View Tickets ---
@@ -98,15 +95,15 @@ async def admin_confirm(msg: types.Message):
 async def tickets(msg: types.Message):
     user_id = msg.from_user.id
     confirmed = supabase.table("transactions").select("*").eq("user_id", user_id).eq("status", "confirmed").execute()
-    await msg.reply(f"🎫 You have {len(confirmed.data)} confirmed ticket(s).")
+    count = len(confirmed.data) if confirmed.data else 0
+    await msg.reply(f"🎫 You have {count} confirmed ticket(s).")
 
 # --- Referral Link ---
 @dp.message_handler(commands=["refer"])
 async def refer(msg: types.Message):
     user_id = msg.from_user.id
     bot_info = await bot.get_me()
-    await msg.reply(f"🔗 Your referral link:
-https://t.me/{bot_info.username}?start={user_id}")
+    await msg.reply(f"🔗 Your referral link:\nhttps://t.me/{bot_info.username}?start={user_id}")
 
 # --- Admin Broadcast ---
 @dp.message_handler(commands=["broadcast"])
@@ -124,7 +121,7 @@ async def broadcast(msg: types.Message):
         try:
             await bot.send_message(user["user_id"], text)
             count += 1
-        except:
+        except Exception:
             pass
     await msg.reply(f"📤 Broadcast sent to {count} users.")
 
@@ -145,7 +142,7 @@ async def draw_winner():
 
     try:
         await bot.send_message(winner_id, f"🏆 You won the TrustWin draw! Prize: {DRAW_PRIZE}$")
-    except:
+    except Exception:
         pass
 
 # --- Schedule Daily Draw ---
