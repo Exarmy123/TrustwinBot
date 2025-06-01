@@ -58,7 +58,7 @@ async def start(msg: types.Message):
 @dp.message_handler(commands=["buy"])
 async def buy(msg: types.Message):
     await msg.reply(
-        f"💰 Send exactly {TICKET_PRICE}$ in USDT (TRC20) to:\n🔐 Wallet Address:\n`{admin_wallet}`\n\n📩 After sending, use /confirm to proceed.",
+        f"💰 Send exactly {TICKET_PRICE}$ in USDT (TRC20) to:\n🔐 Wallet Address:\n`{admin_wallet}`\n\n📩 After sending, use /confirm YourWalletAddress to proceed.",
         parse_mode="Markdown"
     )
 
@@ -92,14 +92,21 @@ async def admin_confirm(msg: types.Message):
 
         supabase.table("transactions").update({"status": "confirmed"}).eq("user_id", user_id).eq("status", "pending").execute()
 
-        # Transfer commissions manually (semi-auto)
-        tron.trx.transfer(private_key, user_wallet, int(DRAW_PRIZE * 1_000_000))  # Dummy call (simulate win)
+        # Transfer prize to user's wallet (manual trigger now)
+        tron.trx.transfer(private_key, user_wallet, int(DRAW_PRIZE * 1_000_000))
 
         # Referral
         user = supabase.table("users").select("*").eq("user_id", user_id).execute().data[0]
         ref_id = user.get("referred_by")
         if ref_id:
-            supabase.table("transactions").insert({"user_id": ref_id, "amount": REFERRAL_COMMISSION, "status": "referral"}).execute()
+            ref_user = supabase.table("users").select("*").eq("user_id", ref_id).execute().data
+            if ref_user:
+                ref_wallet_tx = supabase.table("transactions").select("*").eq("user_id", ref_id).eq("status", "confirmed").execute().data
+                if ref_wallet_tx:
+                    ref_wallet = ref_wallet_tx[-1].get("wallet")
+                    if ref_wallet:
+                        tron.trx.transfer(private_key, ref_wallet, int(REFERRAL_COMMISSION * 1_000_000))
+                        supabase.table("transactions").insert({"user_id": ref_id, "amount": REFERRAL_COMMISSION, "status": "referral"}).execute()
 
         await msg.reply("✅ Ticket issued. Referral rewarded if applicable.")
     except:
@@ -157,7 +164,6 @@ async def draw_winner():
         "date": today
     }).execute()
 
-    # Simulate manual transfer to winner wallet
     tron.trx.transfer(private_key, winner_wallet, int(DRAW_PRIZE * 1_000_000))
 
     try:
@@ -173,6 +179,14 @@ async def schedule_draw():
             await draw_winner()
             await asyncio.sleep(60)
         await asyncio.sleep(30)
+
+# --- /build Command for Debugging & Bot Info ---
+@dp.message_handler(commands=["build"])
+async def build(msg: types.Message):
+    if msg.from_user.id != ADMIN_ID:
+        return await msg.reply("🚫 Unauthorized")
+
+    await msg.reply("🔧 TrustWin Lottery Bot Build Active. All systems nominal.")
 
 # --- Bot Startup ---
 async def main():
