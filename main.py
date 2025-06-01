@@ -36,25 +36,25 @@ users = {}
 tickets = []
 referral_commissions = {}
 payment_requests = {}
-TICKET_PRICE_USDT = 1
+TICKET_PRICE_USDT = 4
 
 WELCOME_MESSAGE = f"""
 Welcome to TrustWin Lottery Bot! 🎉
 
-🎟️ Buy lottery tickets at 4 USDT each.
-🤟 Refer friends and earn 25% commission on their ticket purchases FOR LIFE!
-🏆 Daily draw at 12:01 AM IST. Winner gets all the pot!
+🎟️ Buy lottery tickets at {TICKET_PRICE_USDT} USDT each.
+🤟 Refer friends ONCE and earn 25% lifetime passive income on their ticket purchases!
+🏆 Daily draw at 12:01 AM IST. Winner gets 100% of the total ticket sale prize pool!
 💰 Instant USDT payouts on wins and referrals.
 
 Choose an option below to get started:
 """
 
-HOW_FUNDS_ALLOCATED = """
-💸 How Your 4 USDT is Allocated:
+HOW_FUNDS_ALLOCATED = f"""
+💸 How Your {TICKET_PRICE_USDT} USDT is Allocated:
 
-🏆 Daily Prize Pool: 2.00 USDT - Awarded instantly to the daily winner
-🤝 Referral Commission: 1.00 USDT - Paid directly to the referring user
-🛡️ Global System Tax: 1.00 USDT - For marketing, upgrades, global expansion, and security
+🏆 Daily Prize Pool: 2.00 USDT - Goes to the winner
+🤝 Referral Commission: 1.00 USDT - Lifetime commission to referrer
+🛡️ Global System Tax: 1.00 USDT - For marketing, development, and platform operations
 """
 
 def generate_ticket_number():
@@ -152,7 +152,7 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id not in users:
         await update.message.reply_text("Please start the bot first using /start")
         return
-    await update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT. After sending number, you will receive payment address.")
+    await update.message.reply_text(f"How many tickets do you want to buy? Send a number (1-10). Each costs {TICKET_PRICE_USDT} USDT. After sending number, you will receive payment address.")
 
 async def buy_ticket_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -168,9 +168,20 @@ async def buy_ticket_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     total_cost = count * TICKET_PRICE_USDT
+    for _ in range(count):
+        ticket_number = generate_ticket_number()
+        tickets.append((user_id, ticket_number))
+        users[user_id]["tickets"].append(ticket_number)
+
     await update.message.reply_text(f"To buy {count} ticket(s), please send exactly {total_cost} USDT (only TRC20 network) to the address below:")
     await update.message.reply_text(f"Send USDT (TRC20) to:\n{USDT_ADDRESS}")
     await update.message.reply_text("Please also provide your USDT TRC20 address to receive winnings and referral commission.\n\nOnce your payment is confirmed, tickets will be added. If not updated in 10 minutes, contact @TrustWinSupport with transaction details.")
+
+    # Referral commission
+    referrer_id = users[user_id].get("referrer")
+    if referrer_id:
+        commission = count * 1.0
+        referral_commissions[referrer_id] = referral_commissions.get(referrer_id, 0) + commission
 
 async def mytickets(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -213,7 +224,7 @@ async def daily_draw(context: ContextTypes.DEFAULT_TYPE):
 
         winner = random.choice(tickets)
         winner_id, winner_ticket = winner
-        pot = len(tickets) * TICKET_PRICE_USDT
+        pot = len(tickets) * 2
         try:
             await context.bot.send_message(winner_id, f"🎉 You won the lottery! Ticket #{winner_ticket}. Amount: {pot} USDT.")
             await context.bot.send_message(ADMIN_ID, f"🏆 Winner: User {winner_id} | Ticket #{winner_ticket} | Prize: {pot} USDT")
