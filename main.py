@@ -32,8 +32,11 @@ DAILY_DRAW_MINUTE = 1
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-provider = HTTPProvider(api_key=TRONGRID_API_KEY)
-tron = Tron(provider)
+
+# Properly initialize Tron provider using dict config
+provider = HTTPProvider({"api_key": TRONGRID_API_KEY})
+tron = Tron(provider=provider)
+
 admin_wallet = os.getenv("USDT_ADDRESS")
 private_key = PrivateKey(bytes.fromhex(TRON_PRIVATE_KEY))
 
