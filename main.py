@@ -33,9 +33,9 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Properly initialize Tron provider using dict config
-provider = HTTPProvider({"api_key": TRONGRID_API_KEY})
-tron = Tron(provider=provider)
+# Properly initialize Tron provider using correct endpoint and API key
+provider = HTTPProvider(endpoint_uri="https://api.trongrid.io", api_key=TRONGRID_API_KEY)
+tron = Tron(provider)
 
 admin_wallet = os.getenv("USDT_ADDRESS")
 private_key = PrivateKey(bytes.fromhex(TRON_PRIVATE_KEY))
