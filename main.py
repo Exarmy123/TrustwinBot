@@ -46,7 +46,7 @@ private_key = PrivateKey(bytes.fromhex(TRON_PRIVATE_KEY))
 # --- Commands ---
 @dp.message_handler(commands=["start"])
 async def start(msg: types.Message):
-    user_id = msg.from_user.id
+    user_id = (msg.from_user.id)
     username = msg.from_user.username or "NoUsername"
     args = msg.get_args()
     ref = args if args and args.isdigit() and int(args) != user_id else None
