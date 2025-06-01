@@ -36,7 +36,7 @@ WELCOME_MESSAGE = f"""
 Welcome to TrustWin Lottery Bot! 🎉
 
 🎟️ Buy lottery tickets at 4 USDT each.
-👫 Refer friends and earn 25% commission on their ticket purchases FOR LIFE!
+🤟 Refer friends and earn 25% commission on their ticket purchases FOR LIFE!
 🏆 Daily draw at 12:01 AM IST. Winner gets all the pot!
 💰 Instant USDT payouts on wins and referrals.
 
@@ -122,7 +122,7 @@ def admin_status(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID:
         return
     update.message.reply_text(
-        f"\U0001F4CA Admin Status:\nUsers: {len(users)}\nTickets Sold: {len(tickets)}\nTotal Referral Commissions: {sum(referral_commissions.values()):.2f} USDT"
+        f"📊 Admin Status:\nUsers: {len(users)}\nTickets Sold: {len(tickets)}\nTotal Referral Commissions: {sum(referral_commissions.values()):.2f} USDT"
     )
 
 def daily_draw(context: CallbackContext):
@@ -149,6 +149,24 @@ def daily_draw(context: CallbackContext):
 def unknown(update: Update, context: CallbackContext):
     update.message.reply_text("Unknown command. Use /buy, /mytickets, /referral.")
 
+def getwinner(update: Update, context: CallbackContext):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if not tickets:
+        update.message.reply_text("No tickets have been sold today.")
+        return
+
+    winner = random.choice(tickets)
+    winner_id, winner_ticket = winner
+    pot = len(tickets) * TICKET_PRICE_USDT
+
+    context.bot.send_message(winner_id, f"🎉 You won the lottery! Ticket #{winner_ticket}. Amount: {pot} USDT.")
+    update.message.reply_text(f"🏆 Winner: User {winner_id} | Ticket #{winner_ticket} | Prize: {pot} USDT")
+
+    tickets.clear()
+    for u in users.values():
+        u["tickets"] = []
+
 def main():
     updater = Updater(token=BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -158,6 +176,7 @@ def main():
     dp.add_handler(CommandHandler("mytickets", mytickets))
     dp.add_handler(CommandHandler("referral", referral))
     dp.add_handler(CommandHandler("adminstatus", admin_status))
+    dp.add_handler(CommandHandler("getwinner", getwinner))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, buy_ticket_number))
     dp.add_handler(MessageHandler(Filters.command, unknown))
 
