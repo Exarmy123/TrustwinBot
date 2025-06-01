@@ -133,7 +133,10 @@ def handle_text(update: Update, context: CallbackContext):
             target, msg = parts
             if target.strip().lower() == "all":
                 for uid in users:
-                    context.bot.send_message(uid, msg.strip())
+                    try:
+                        context.bot.send_message(uid, msg.strip())
+                    except:
+                        continue
                 update.message.reply_text("✅ Message sent to all users.")
             else:
                 try:
