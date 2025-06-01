@@ -1,6 +1,6 @@
-python-telegram-bot==20.0
-supabase==1.0.3
+fastapi
+uvicorn
+aiogram
 python-dotenv
+supabase
 tronpy
-httpx==0.23.3
-aiogram==2.25.2
