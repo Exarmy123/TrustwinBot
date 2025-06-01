@@ -10,6 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils import executor
 from supabase import create_client
 from tronpy import Tron
+from tronpy.providers import HTTPProvider
 from tronpy.keys import PrivateKey
 
 # --- Load environment variables ---
@@ -19,7 +20,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY")
-TRON_NODE = os.getenv("TRON_NODE") or "https://api.trongrid.io"
+TRONGRID_API_KEY = os.getenv("TRONGRID_API_KEY")
 TICKET_PRICE = 4.0  # USD
 REFERRAL_COMMISSION = 1.0
 ADMIN_COMMISSION = 1.0
@@ -31,7 +32,8 @@ DAILY_DRAW_MINUTE = 1
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-tron = Tron(provider=TRON_NODE)
+provider = HTTPProvider(api_key=TRONGRID_API_KEY)
+tron = Tron(provider)
 admin_wallet = os.getenv("USDT_ADDRESS")
 private_key = PrivateKey(bytes.fromhex(TRON_PRIVATE_KEY))
 
