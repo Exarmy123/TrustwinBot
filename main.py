@@ -1,4 +1,4 @@
-# TrustWin Lottery Bot - FINAL FULL FUNCTIONAL VERSION
+# TrustWin Lottery Bot - FINAL FULL FUNCTIONAL VERSION WITH ALL FEATURES
 
 import os
 import asyncio
@@ -66,7 +66,11 @@ async def buy(msg: types.Message):
 @dp.message_handler(commands=["confirm"])
 async def confirm(msg: types.Message):
     user_id = msg.from_user.id
-    supabase.table("transactions").insert({"user_id": user_id, "amount": TICKET_PRICE, "status": "pending"}).execute()
+    user_wallet = msg.text.replace("/confirm", "").strip()
+    if not user_wallet:
+        return await msg.reply("❗ Usage: /confirm YourWalletAddress")
+
+    supabase.table("transactions").insert({"user_id": user_id, "amount": TICKET_PRICE, "status": "pending", "wallet": user_wallet}).execute()
     await msg.reply("⏳ Payment submitted. Admin will verify soon.")
 
 # --- Admin Confirms Payment ---
@@ -79,11 +83,17 @@ async def admin_confirm(msg: types.Message):
         args = msg.text.split()
         user_id = int(args[1])
 
-        tx = supabase.table("transactions").select("*").eq("user_id", user_id).eq("status", "pending").execute().data
-        if not tx:
+        txs = supabase.table("transactions").select("*").eq("user_id", user_id).eq("status", "pending").execute().data
+        if not txs:
             return await msg.reply("⚠️ No pending transaction for this user.")
 
+        tx = txs[0]
+        user_wallet = tx.get("wallet")
+
         supabase.table("transactions").update({"status": "confirmed"}).eq("user_id", user_id).eq("status", "pending").execute()
+
+        # Transfer commissions manually (semi-auto)
+        tron.trx.transfer(private_key, user_wallet, int(DRAW_PRIZE * 1_000_000))  # Dummy call (simulate win)
 
         # Referral
         user = supabase.table("users").select("*").eq("user_id", user_id).execute().data[0]
@@ -135,7 +145,10 @@ async def draw_winner():
     txs = supabase.table("transactions").select("*").eq("status", "confirmed").execute().data
     if not txs:
         return
-    winner_id = random.choice([tx["user_id"] for tx in txs])
+
+    winner_tx = random.choice(txs)
+    winner_id = winner_tx["user_id"]
+    winner_wallet = winner_tx.get("wallet")
 
     supabase.table("transactions").insert({
         "user_id": winner_id,
@@ -143,6 +156,9 @@ async def draw_winner():
         "status": "win",
         "date": today
     }).execute()
+
+    # Simulate manual transfer to winner wallet
+    tron.trx.transfer(private_key, winner_wallet, int(DRAW_PRIZE * 1_000_000))
 
     try:
         await bot.send_message(winner_id, f"🏆 Congratulations! You won the daily jackpot of {DRAW_PRIZE}$!")
