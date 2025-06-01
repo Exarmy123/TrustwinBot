@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 users = {}
 tickets = []
 referral_commissions = {}
+payment_requests = {}
 TICKET_PRICE_USDT = 1
 
 WELCOME_MESSAGE = f"""
@@ -49,7 +50,7 @@ def generate_ticket_number():
     return random.randint(100000, 999999)
 
 def get_referral_link(user_id):
-    return f"https://t.me/YourBotUsername?start=ref{user_id}"
+    return f"https://t.me/TrustWinBot?start=ref{user_id}"
 
 def start(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -57,7 +58,7 @@ def start(update: Update, context: CallbackContext):
     referrer_id = None
     if args and args[0].startswith("ref"):
         try:
-            referrer_id = int(args[0][3:])
+            rTrueferrer_id = int(args[0][3:])
             if referrer_id == user.id:
                 referrer_id = None
         except:
@@ -146,6 +147,25 @@ def daily_draw(context: CallbackContext):
         for u in users.values():
             u["tickets"] = []
 
+def get_usdt(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    if user_id not in users:
+        update.message.reply_text("Please start the bot first using /start")
+        return
+
+    if referral_commissions.get(user_id, 0) <= 0:
+        update.message.reply_text("You have no referral commissions to claim yet.")
+        return
+
+    if user_id in payment_requests:
+        update.message.reply_text("You've already requested a USDT payout. Please wait until it is processed.")
+        return
+
+    amount = referral_commissions[user_id]
+    payment_requests[user_id] = amount
+    update.message.reply_text(f"✅ Your USDT {amount:.2f} payout request has been sent to admin. You will receive payment shortly.")
+    context.bot.send_message(ADMIN_ID, f"💸 Payout Request: User {user_id} requested {amount:.2f} USDT referral commission.")
+
 def unknown(update: Update, context: CallbackContext):
     update.message.reply_text("Unknown command. Use /buy, /mytickets, /referral.")
 
@@ -177,6 +197,7 @@ def main():
     dp.add_handler(CommandHandler("referral", referral))
     dp.add_handler(CommandHandler("adminstatus", admin_status))
     dp.add_handler(CommandHandler("getwinner", getwinner))
+    dp.add_handler(CommandHandler("getusdt", get_usdt))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, buy_ticket_number))
     dp.add_handler(MessageHandler(Filters.command, unknown))
 
