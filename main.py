@@ -36,6 +36,7 @@ users = {}
 tickets = []
 referral_commissions = {}
 payment_requests = {}
+user_wallets = {}
 TICKET_PRICE_USDT = 4
 
 WELCOME_MESSAGE = f"""
@@ -125,6 +126,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, (uid, amount) in enumerate(top_referrers, 1):
             msg += f"{i}. User {uid} - {amount:.2f} USDT\n"
         await update.message.reply_text(msg or "No referrals yet.")
+    elif text.startswith("wallet:"):
+        wallet = text[7:].strip()
+        if wallet:
+            user_id = update.effective_user.id
+            user_wallets[user_id] = wallet
+            await update.message.reply_text(f"✅ Your wallet address has been saved: {wallet}")
+        else:
+            await update.message.reply_text("❌ Please send a valid wallet address after 'wallet:'")
     elif text.startswith("send:") and update.effective_user.id == ADMIN_ID:
         parts = text[5:].split("|", 1)
         if len(parts) == 2:
@@ -175,9 +184,8 @@ async def buy_ticket_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"To buy {count} ticket(s), please send exactly {total_cost} USDT (only TRC20 network) to the address below:")
     await update.message.reply_text(f"Send USDT (TRC20) to:\n{USDT_ADDRESS}")
-    await update.message.reply_text("Please also provide your USDT TRC20 address to receive winnings and referral commission.\n\nOnce your payment is confirmed, tickets will be added. If not updated in 10 minutes, contact @TrustWinSupport with transaction details.")
+    await update.message.reply_text("Please also provide your USDT TRC20 address to receive winnings and referral commission.\n\nSend it using this format:\n\nwallet:<your-wallet-address>\n\nOnce your payment is confirmed, tickets will be added. If not updated in 10 minutes, contact @TrustWinSupport with transaction details.")
 
-    # Referral commission
     referrer_id = users[user_id].get("referrer")
     if referrer_id:
         commission = count * 1.0
@@ -211,8 +219,13 @@ async def get_usdt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     amount = referral_commissions[user_id]
     payment_requests[user_id] = amount
     referral_commissions[user_id] = 0
-    await update.message.reply_text(f"✅ Your USDT {amount:.2f} payout request has been sent to admin. You will receive payment shortly.")
-    await context.bot.send_message(ADMIN_ID, f"💸 Payout Request: User {user_id} requested {amount:.2f} USDT referral commission.")
+
+    wallet = user_wallets.get(user_id)
+    if wallet:
+        await update.message.reply_text(f"✅ Your USDT {amount:.2f} payout request has been sent to admin. You will receive payment shortly.")
+        await context.bot.send_message(ADMIN_ID, f"💸 Payout Request: User {user_id} requested {amount:.2f} USDT referral commission.\nWallet: {wallet}")
+    else:
+        await update.message.reply_text("❗ You have not provided a wallet address yet. Please send it using this format:\nwallet:<your-wallet-address>")
 
 async def daily_draw(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.utcnow()
