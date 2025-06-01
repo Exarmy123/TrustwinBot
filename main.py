@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import asyncio
 import random
 from dotenv import load_dotenv
+from supabase import create_client
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +23,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY")
 
+# Initialize Supabase client
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# In-memory database
+# In-memory database (to be replaced with Supabase integration)
 users = {}
 tickets = []
 referral_commissions = {}
@@ -45,6 +49,14 @@ Welcome to TrustWin Lottery Bot! 🎉
 💰 Instant USDT payouts on wins and referrals.
 
 Choose an option below to get started:
+"""
+
+HOW_FUNDS_ALLOCATED = """
+💸 How Your 4 USDT is Allocated:
+
+🏆 Daily Prize Pool: 2.00 USDT - Awarded instantly to the daily winner
+🤝 Referral Commission: 1.00 USDT - Paid directly to the referring user
+🛡️ Global System Tax: 1.00 USDT - For marketing, upgrades, global expansion, and security
 """
 
 def generate_ticket_number():
@@ -102,7 +114,7 @@ def handle_text(update: Update, context: CallbackContext):
     elif text == "check result":
         context.bot.send_message(update.effective_chat.id, "Daily draw happens at 12:01 AM IST. Stay tuned!")
     elif text == "how it works":
-        update.message.reply_text(WELCOME_MESSAGE)
+        update.message.reply_text(WELCOME_MESSAGE + "\n" + HOW_FUNDS_ALLOCATED)
     elif text == "my tickets":
         mytickets(update, context)
     elif text == "withdraw":
@@ -115,6 +127,20 @@ def handle_text(update: Update, context: CallbackContext):
         for i, (uid, amount) in enumerate(top_referrers, 1):
             msg += f"{i}. User {uid} - {amount:.2f} USDT\n"
         update.message.reply_text(msg or "No referrals yet.")
+    elif text.startswith("send:") and update.effective_user.id == ADMIN_ID:
+        parts = text[5:].split("|", 1)
+        if len(parts) == 2:
+            target, msg = parts
+            if target.strip().lower() == "all":
+                for uid in users:
+                    context.bot.send_message(uid, msg.strip())
+                update.message.reply_text("✅ Message sent to all users.")
+            else:
+                try:
+                    context.bot.send_message(int(target.strip()), msg.strip())
+                    update.message.reply_text("✅ Message sent to user.")
+                except:
+                    update.message.reply_text("❌ Failed to send message.")
     elif text.isdigit():
         buy_ticket_number(update, context)
     else:
@@ -125,7 +151,7 @@ def buy(update: Update, context: CallbackContext):
     if user_id not in users:
         update.message.reply_text("Please start the bot first using /start")
         return
-    update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT.")
+    update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT. After sending number, you will receive payment address.")
 
 def buy_ticket_number(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -141,22 +167,9 @@ def buy_ticket_number(update: Update, context: CallbackContext):
         return
 
     total_cost = count * TICKET_PRICE_USDT
-    new_tickets = []
-    for _ in range(count):
-        t = generate_ticket_number()
-        tickets.append((user_id, t))
-        users[user_id]["tickets"].append(t)
-        new_tickets.append(t)
-
-    referrer = users[user_id]["referrer"]
-    if referrer:
-        commission = total_cost * 0.5
-        referral_commissions[referrer] = referral_commissions.get(referrer, 0) + commission
-
-    update.message.reply_text(
-        f"Congrats! You bought {count} ticket(s): {', '.join(map(str, new_tickets))}\n"
-        f"Total cost: {total_cost} USDT\nUse 'My Referral' to get your referral link."
-    )
+    update.message.reply_text(f"To buy {count} ticket(s), please send exactly {total_cost} USDT (only TRC20 network) to the address below:")
+    update.message.reply_text(f"Send USDT (TRC20) to:\n{USDT_ADDRESS}")
+    update.message.reply_text("Please also provide your USDT TRC20 address to receive winnings and referral commission.\n\nOnce your payment is confirmed, tickets will be added. If not updated in 10 minutes, contact @TrustWinSupport with transaction details.")
 
 def mytickets(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -185,6 +198,7 @@ def get_usdt(update: Update, context: CallbackContext):
 
     amount = referral_commissions[user_id]
     payment_requests[user_id] = amount
+    referral_commissions[user_id] = 0
     update.message.reply_text(f"✅ Your USDT {amount:.2f} payout request has been sent to admin. You will receive payment shortly.")
     context.bot.send_message(ADMIN_ID, f"💸 Payout Request: User {user_id} requested {amount:.2f} USDT referral commission.")
 
