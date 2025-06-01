@@ -1,4 +1,4 @@
-supabase
-python-telegram-bot
-requests
+aiogram==2.25.1
 python-dotenv
+supabase
+tronpy
