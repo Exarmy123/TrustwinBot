@@ -41,7 +41,7 @@ async def start(msg: types.Message):
     user_id = msg.from_user.id
     username = msg.from_user.username or "NoUsername"
     args = msg.get_args()
-    ref = args if args else None
+    ref = args if args and args.isdigit() and int(args) != user_id else None
 
     existing = supabase.table("users").select("*").eq("user_id", user_id).execute()
     if not existing.data:
