@@ -2,13 +2,13 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import (
-    Updater,
+    ApplicationBuilder,
     CommandHandler,
     MessageHandler,
-    Filters,
-    CallbackContext
+    filters,
+    ContextTypes
 )
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 import asyncio
 import random
 from dotenv import load_dotenv
@@ -51,7 +51,7 @@ def generate_ticket_number():
 def get_referral_link(user_id):
     return f"https://t.me/YourBotUsername?start=ref{user_id}"
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
     referrer_id = None
@@ -67,26 +67,26 @@ def start(update: Update, context: CallbackContext):
         users[user.id] = {"tickets": [], "referrals": [], "referrer": referrer_id}
         if referrer_id and referrer_id in users:
             users[referrer_id]["referrals"].append(user.id)
-    update.message.reply_text(WELCOME_MESSAGE)
+    await update.message.reply_text(WELCOME_MESSAGE)
 
-def buy(update: Update, context: CallbackContext):
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in users:
-        update.message.reply_text("Please start the bot first using /start")
+        await update.message.reply_text("Please start the bot first using /start")
         return
-    update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT.")
+    await update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT.")
 
-def buy_ticket_number(update: Update, context: CallbackContext):
+async def buy_ticket_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in users:
         return
     text = update.message.text.strip()
     if not text.isdigit():
-        update.message.reply_text("Please send a valid number.")
+        await update.message.reply_text("Please send a valid number.")
         return
     count = int(text)
     if not (1 <= count <= 10):
-        update.message.reply_text("Buy minimum 1 and maximum 10 tickets.")
+        await update.message.reply_text("Buy minimum 1 and maximum 10 tickets.")
         return
 
     total_cost = count * TICKET_PRICE_USDT
@@ -102,30 +102,30 @@ def buy_ticket_number(update: Update, context: CallbackContext):
         commission = total_cost * 0.5
         referral_commissions[referrer] = referral_commissions.get(referrer, 0) + commission
 
-    update.message.reply_text(
+    await update.message.reply_text(
         f"Congrats! You bought {count} ticket(s): {', '.join(map(str, new_tickets))}\n"
         f"Total cost: {total_cost} USDT\nUse /referral to get your referral link."
     )
 
-def mytickets(update: Update, context: CallbackContext):
+async def mytickets(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in users or not users[user_id]["tickets"]:
-        update.message.reply_text("You have no tickets. Use /buy to get some.")
+        await update.message.reply_text("You have no tickets. Use /buy to get some.")
         return
-    update.message.reply_text(f"Your tickets: {', '.join(map(str, users[user_id]['tickets']))}")
+    await update.message.reply_text(f"Your tickets: {', '.join(map(str, users[user_id]['tickets']))}")
 
-def referral(update: Update, context: CallbackContext):
+async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    update.message.reply_text(f"Your referral link:\n{get_referral_link(user_id)}")
+    await update.message.reply_text(f"Your referral link:\n{get_referral_link(user_id)}")
 
-def admin_status(update: Update, context: CallbackContext):
+async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-    update.message.reply_text(
+    await update.message.reply_text(
         f"\U0001F4CA Admin Status:\nUsers: {len(users)}\nTickets Sold: {len(tickets)}\nTotal Referral Commissions: {sum(referral_commissions.values()):.2f} USDT"
     )
 
-def daily_draw(context: CallbackContext):
+async def daily_draw(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.utcnow()
     ist_time = now + timedelta(hours=5, minutes=30)
     if ist_time.hour == 0 and ist_time.minute == 1:
@@ -137,8 +137,8 @@ def daily_draw(context: CallbackContext):
         winner_id, winner_ticket = winner
         pot = len(tickets) * TICKET_PRICE_USDT
         try:
-            context.bot.send_message(winner_id, f"🎉 You won the lottery! Ticket #{winner_ticket}. Amount: {pot} USDT.")
-            context.bot.send_message(ADMIN_ID, f"🏆 Winner: User {winner_id} | Ticket #{winner_ticket} | Prize: {pot} USDT")
+            await context.bot.send_message(winner_id, f"🎉 You won the lottery! Ticket #{winner_ticket}. Amount: {pot} USDT.")
+            await context.bot.send_message(ADMIN_ID, f"🏆 Winner: User {winner_id} | Ticket #{winner_ticket} | Prize: {pot} USDT")
         except Exception as e:
             logger.error(f"Notification failed: {e}")
 
@@ -146,26 +146,23 @@ def daily_draw(context: CallbackContext):
         for u in users.values():
             u["tickets"] = []
 
-def unknown(update: Update, context: CallbackContext):
-    update.message.reply_text("Unknown command. Use /buy, /mytickets, /referral.")
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Unknown command. Use /buy, /mytickets, /referral.")
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("buy", buy))
-    dp.add_handler(CommandHandler("mytickets", mytickets))
-    dp.add_handler(CommandHandler("referral", referral))
-    dp.add_handler(CommandHandler("adminstatus", admin_status))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, buy_ticket_number))
-    dp.add_handler(MessageHandler(Filters.command, unknown))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("mytickets", mytickets))
+    app.add_handler(CommandHandler("referral", referral))
+    app.add_handler(CommandHandler("adminstatus", admin_status))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), buy_ticket_number))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
-    jq = updater.job_queue
-    jq.run_repeating(daily_draw, interval=60, first=0)
+    app.job_queue.run_repeating(daily_draw, interval=60, first=0)
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
