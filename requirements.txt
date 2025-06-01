@@ -1,6 +1,1 @@
-fastapi
-uvicorn
-aiogram
-python-dotenv
-supabase
-tronpy
+python-telegram-bot==20.3
