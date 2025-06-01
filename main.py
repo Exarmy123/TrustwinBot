@@ -1,11 +1,10 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
-    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
@@ -14,7 +13,11 @@ import asyncio
 import random
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+USDT_WALLET = os.getenv("USDT_WALLET")
 
 # Enable logging
 logging.basicConfig(
@@ -23,20 +26,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Environment Variables
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))  # Your Telegram user id (int)
-USDT_WALLET = os.getenv("USDT_WALLET")  # Your TRC-20 USDT Wallet address
+# In-memory database
+users = {}
+tickets = []
+referral_commissions = {}
+TICKET_PRICE_USDT = 1
 
-# In-memory databases (replace with real DB in production)
-users = {}          # user_id : { 'tickets': [], 'referrals': [], 'referrer': user_id or None }
-tickets = []        # list of tuples (user_id, ticket_number)
-referral_commissions = {}  # user_id : total_commission_amount
-
-# Config
-TICKET_PRICE_USDT = 1  # 1 USDT per ticket
-
-WELCOME_MESSAGE = """
+WELCOME_MESSAGE = f"""
 Welcome to TrustWin Lottery Bot! 🎉
 
 🎟️ Buy lottery tickets at 1 USDT each.
@@ -49,184 +45,127 @@ Use /mytickets to see your tickets.
 Use /referral to get your referral link.
 """
 
-# Utility functions
 def generate_ticket_number():
-    # 6-digit ticket number
     return random.randint(100000, 999999)
 
 def get_referral_link(user_id):
     return f"https://t.me/YourBotUsername?start=ref{user_id}"
 
-# Command Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     args = context.args
-
-    # Check if user started with referral
     referrer_id = None
     if args and args[0].startswith("ref"):
         try:
             referrer_id = int(args[0][3:])
             if referrer_id == user.id:
-                referrer_id = None  # Can't refer self
+                referrer_id = None
         except:
             referrer_id = None
 
     if user.id not in users:
         users[user.id] = {"tickets": [], "referrals": [], "referrer": referrer_id}
-        # Add to referrer's referral list
         if referrer_id and referrer_id in users:
             users[referrer_id]["referrals"].append(user.id)
-    
     await update.message.reply_text(WELCOME_MESSAGE)
 
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in users:
-        await update.message.reply_text("Please start the bot first by sending /start")
+        await update.message.reply_text("Please start the bot first using /start")
         return
-
-    # Simple prompt to enter number of tickets
-    await update.message.reply_text("How many tickets do you want to buy? Send a number (e.g., 3). Each ticket costs 1 USDT.")
-
-    # Next message will be handled by message handler
+    await update.message.reply_text("How many tickets do you want to buy? Send a number (1-10). Each costs 1 USDT.")
 
 async def buy_ticket_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text.strip()
-
-    if not text.isdigit():
-        await update.message.reply_text("Please send a valid number (e.g., 2).")
+    if user_id not in users:
         return
-
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text("Please send a valid number.")
+        return
     count = int(text)
-    if count < 1 or count > 10:
-        await update.message.reply_text("You can buy minimum 1 and maximum 10 tickets at a time.")
+    if not (1 <= count <= 10):
+        await update.message.reply_text("Buy minimum 1 and maximum 10 tickets.")
         return
 
     total_cost = count * TICKET_PRICE_USDT
-
-    # Here you would integrate payment gateway or manual payment verification.
-    # For now, assume payment is done manually outside the bot.
-
-    # Generate tickets
     new_tickets = []
     for _ in range(count):
-        ticket_num = generate_ticket_number()
-        new_tickets.append(ticket_num)
-        tickets.append((user_id, ticket_num))
-        users[user_id]["tickets"].append(ticket_num)
+        t = generate_ticket_number()
+        tickets.append((user_id, t))
+        users[user_id]["tickets"].append(t)
+        new_tickets.append(t)
 
-    # Calculate referral commission if any
-    referrer_id = users[user_id]["referrer"]
-    if referrer_id:
-        commission = total_cost * 0.5  # 50% commission
-        referral_commissions[referrer_id] = referral_commissions.get(referrer_id, 0) + commission
-        # Ideally, send commission instantly here if wallet integration is done.
+    referrer = users[user_id]["referrer"]
+    if referrer:
+        commission = total_cost * 0.5
+        referral_commissions[referrer] = referral_commissions.get(referrer, 0) + commission
 
     await update.message.reply_text(
-        f"Congrats! You bought {count} ticket(s): {', '.join(str(t) for t in new_tickets)}\n"
-        f"Total cost: {total_cost} USDT\n"
-        f"Refer friends and earn 50% commission on their purchases!\n"
-        f"Use /referral to get your referral link."
+        f"Congrats! You bought {count} ticket(s): {', '.join(map(str, new_tickets))}\n"
+        f"Total cost: {total_cost} USDT\nUse /referral to get your referral link."
     )
 
 async def mytickets(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id not in users or not users[user_id]["tickets"]:
-        await update.message.reply_text("You don't have any tickets yet. Use /buy to purchase tickets.")
+        await update.message.reply_text("You have no tickets. Use /buy to get some.")
         return
-    user_tickets = users[user_id]["tickets"]
-    await update.message.reply_text(f"Your tickets: {', '.join(str(t) for t in user_tickets)}")
+    await update.message.reply_text(f"Your tickets: {', '.join(map(str, users[user_id]['tickets']))}")
 
 async def referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    link = get_referral_link(user_id)
-    await update.message.reply_text(f"Share this referral link to earn 50% commission for life:\n{link}")
+    await update.message.reply_text(f"Your referral link:\n{get_referral_link(user_id)}")
 
 async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("You are not authorized to use this command.")
+    if update.effective_user.id != ADMIN_ID:
         return
-
-    total_users = len(users)
-    total_tickets = len(tickets)
-    total_commissions = sum(referral_commissions.values())
     await update.message.reply_text(
-        f"📊 Admin Status:\n"
-        f"Total Users: {total_users}\n"
-        f"Total Tickets Sold: {total_tickets}\n"
-        f"Total Referral Commissions: {total_commissions:.2f} USDT"
+        f"\U0001F4CA Admin Status:\nUsers: {len(users)}\nTickets Sold: {len(tickets)}\nTotal Referral Commissions: {sum(referral_commissions.values()):.2f} USDT"
     )
 
-# Daily draw function (run in background)
 async def daily_draw(app):
     while True:
-        now = datetime.now()
-        # Draw at 12:01 AM IST => UTC+5:30 means 18:31 UTC previous day
-        # Let's run draw at UTC 18:31 daily
-        target_time_utc = datetime.combine(now.date(), time(18, 31))
-        if now > target_time_utc:
-            target_time_utc += timedelta(days=1)
-        wait_seconds = (target_time_utc - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
+        now = datetime.utcnow()
+        target = datetime.combine(now.date(), time(18, 31))
+        if now > target:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
 
         if not tickets:
-            logger.info("No tickets sold today, no draw.")
+            logger.info("No tickets, skipping draw.")
             continue
 
-        # Pick a winner randomly
-        winner_ticket = random.choice(tickets)
-        winner_user_id = winner_ticket[0]
-
-        # Total pot is total tickets * ticket price
-        total_pot = len(tickets) * TICKET_PRICE_USDT
-
-        # TODO: Send USDT payout to winner's wallet here
-
-        # Notify winner and admin
+        winner = random.choice(tickets)
+        winner_id, winner_ticket = winner
+        pot = len(tickets) * TICKET_PRICE_USDT
         try:
-            await app.bot.send_message(
-                chat_id=winner_user_id,
-                text=f"🎉 Congratulations! You won today's lottery with ticket #{winner_ticket[1]}!\nYou have won {total_pot} USDT! 🏆"
-            )
-            await app.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"🏆 Daily Lottery Winner: User {winner_user_id} with ticket #{winner_ticket[1]} won {total_pot} USDT."
-            )
+            await app.bot.send_message(winner_id, f"🎉 You won the lottery! Ticket #{winner_ticket}. Amount: {pot} USDT.")
+            await app.bot.send_message(ADMIN_ID, f"🏆 Winner: User {winner_id} | Ticket #{winner_ticket} | Prize: {pot} USDT")
         except Exception as e:
-            logger.error(f"Error sending winner notification: {e}")
+            logger.error(f"Notification failed: {e}")
 
-        # Reset tickets for next day
         tickets.clear()
         for u in users.values():
-            u["tickets"].clear()
+            u["tickets"] = []
 
-# Unknown command handler
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Sorry, I didn't understand that command. Use /help to see available commands.")
+    await update.message.reply_text("Unknown command. Use /buy, /mytickets, /referral.")
 
-# Main function to run the bot
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("buy", buy))
     app.add_handler(CommandHandler("mytickets", mytickets))
     app.add_handler(CommandHandler("referral", referral))
     app.add_handler(CommandHandler("adminstatus", admin_status))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, buy_ticket_number))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown))
 
-    # Message handler for number of tickets after /buy
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), buy_ticket_number))
-
-    app.add_handler(MessageHandler(filters.COMMAND, unknown))  # Unknown commands
-
-    # Run daily draw in background
     app.job_queue.run_repeating(lambda ctx: asyncio.create_task(daily_draw(app)), interval=86400, first=10)
 
     await app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
