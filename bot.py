@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+ADMIN_ID_STR = os.getenv("ADMIN_ID")
+if ADMIN_ID_STR is None:
+    raise ValueError("ADMIN_ID environment variable not set")
+ADMIN_ID = int(ADMIN_ID_STR)
 
 # Mockup data (should be replaced with DB or Blockchain integration)
 past_winners = [
