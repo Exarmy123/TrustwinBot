@@ -1,7 +1,2 @@
 # requirements.txt
-python-telegram-bot==20.7
-supabase==2.8.1  # इसे पिन करें
-httpx==0.25.2  # इसे भी पिन करें (आपके इंस्टॉलेशन लॉग से)
-pytz
-APScheduler
-# python-dotenv
+supabase-py>=2.0.0  # Ya jo bhi latest stable version ho
