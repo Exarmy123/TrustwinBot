@@ -1,2 +1,7 @@
 # requirements.txt
-supabase-py>=2.0.0  # Ya jo bhi latest stable version ho
+
+python-telegram-bot[ext]>=20.0
+supabase>=2.0.0  # <--- YEH CHANGE KAREIN
+pytz
+# Agar python-dotenv use kar rahe hain toh:
+# python-dotenv
