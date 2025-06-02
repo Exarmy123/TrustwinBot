@@ -1,9 +1,10 @@
-# TrustWin Telegram Lottery Bot - Full Code with ENV and Supabase Integration (Updated)
+# TrustWin Telegram Lottery Bot - Full Code with ENV and Supabase Integration
 
 import os
 import random
 import logging
 import asyncio
+import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -24,7 +25,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Logging
 logging.basicConfig(level=logging.INFO)
 
-# Constants
 TICKET_PRICE = 4.0
 REFERRAL_PERCENT = 0.25
 TAX_PERCENT = 0.25
@@ -36,49 +36,67 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ref = context.args[0] if context.args else ""
     supabase.table("users").upsert({"id": user.id, "username": user.username, "ref": ref}).execute()
     await update.message.reply_text(
-        f"Welcome {user.first_name}!
-\n🎟 Buy tickets and win crypto daily!
-💸 Lifetime 25% referral income!
-Use /buy to get started."
+        f"Welcome {user.first_name}!\n\n🎟 Buy tickets and win crypto daily!\n💸 Lifetime 25% referral income!\nUse /buy to get started."
     )
 
-# Buy ticket command
+# Buy command
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    ticket = {
-        "user_id": user.id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "username": user.username
-    }
-    supabase.table("tickets").insert(ticket).execute()
+    supabase.table("tickets").insert({"user_id": user.id, "timestamp": datetime.utcnow().isoformat()}).execute()
     await update.message.reply_text(
         "✅ Ticket purchased successfully!\n🏆 You’re now eligible for the next draw."
     )
 
-# Daily draw - Admin only
+# Verify USDT Payment before ticket
+async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not context.args:
+        await update.message.reply_text("⚠️ Please provide your Tron wallet address.\nExample:\n/verify TYxxxxxx")
+        return
+
+    user_wallet = context.args[0]
+    await update.message.reply_text("🔍 Verifying your payment, please wait...")
+
+    # TRON API Call - Demo (Replace with official endpoint or API key if needed)
+    response = requests.get(f"https://apilist.tronscanapi.com/api/transfer/trc20?fromAddress={user_wallet}&toAddress={USDT_ADDRESS}&limit=10")
+    if response.status_code != 200:
+        await update.message.reply_text("❌ Error verifying payment. Try again later.")
+        return
+
+    data = response.json()
+    success = False
+    for tx in data.get("data", []):
+        if tx["to_address"] == USDT_ADDRESS and float(tx["amount_str"]) >= TICKET_PRICE:
+            success = True
+            break
+
+    if success:
+        supabase.table("tickets").insert({
+            "user_id": user.id,
+            "timestamp": datetime.utcnow().isoformat()
+        }).execute()
+        await update.message.reply_text("✅ Payment verified!\n🎟 Your ticket is confirmed for the next draw.")
+    else:
+        await update.message.reply_text("❌ No valid USDT payment found.\nMake sure you sent 4 USDT (TRC20) to our wallet.")
+
+# Daily winner draw (called by admin manually)
 async def draw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to run the draw.")
         return
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    tickets_response = supabase.table("tickets").select("*").gte("timestamp", today.isoformat()).execute()
-    tickets = tickets_response.data
-    if not tickets:
+    today = datetime.utcnow().date()
+    tix = supabase.table("tickets").select("*").gte("timestamp", today.isoformat()).execute().data
+    if not tix:
         await update.message.reply_text("No tickets sold today.")
         return
-    winner = random.choice(tickets)
-    prize = len(tickets) * POOL_PER_TICKET
-    supabase.table("winners").insert({"user_id": winner['user_id'], "amount": prize}).execute()
-    await context.bot.send_message(chat_id=winner['user_id'], text=f"🎉 You’ve won today’s lottery! You get {prize} USDT!")
-    await update.message.reply_text(f"🏆 Winner: {winner['user_id']}\nPrize: {prize} USDT")
+    winner = random.choice(tix)
+    user_id = winner['user_id']
+    supabase.table("winners").insert({"user_id": user_id, "amount": len(tix)*POOL_PER_TICKET}).execute()
+    await context.bot.send_message(chat_id=user_id, text=f"🎉 You’ve won today’s lottery! You get {len(tix)*POOL_PER_TICKET} USDT!")
+    await update.message.reply_text(f"🏆 Winner: {user_id}\nPrize: {len(tix)*POOL_PER_TICKET} USDT")
 
 # Admin broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to broadcast messages.")
-        return
-    if not context.args:
-        await update.message.reply_text("⚠️ Please provide a message to broadcast.")
         return
     msg = " ".join(context.args)
     users = supabase.table("users").select("id").execute().data
@@ -87,41 +105,38 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=u['id'], text=msg)
         except:
             continue
-    await update.message.reply_text("📣 Broadcast sent successfully.")
+    await update.message.reply_text("📣 Broadcast sent.")
 
 # Fake leaderboard
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    board = [(f"@MegaWin{i}", random.randint(1000, 50000)) for i in range(1, 51)]
+    board = [
+        (f"@MegaWin{i}", random.randint(1000, 50000)) for i in range(1, 51)
+    ]
     msg = "🏆 Top 50 Winners:\n\n"
     for i, (name, amt) in enumerate(board, 1):
         msg += f"{i}. {name} — {amt} USDT\n"
     await update.message.reply_text(msg)
 
-# Help command
+# Help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "ℹ️ Available Commands:\n"
-        "/start - Start the bot\n"
-        "/buy - Buy a lottery ticket\n"
-        "/leaderboard - View top winners\n"
-        "/help - Show this help message"
-    )
+    await update.message.reply_text("Use /buy or /verify to buy a ticket, /leaderboard to view winners.")
 
-# Main entry point
+# Manual GET updates test (for troubleshooting only)
+def check_updates():
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    response = requests.get(url)
+    print(response.json())
+
+# Main
 if __name__ == '__main__':
+    check_updates()  # For debug only. Remove or comment out in production.
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("verify", verify))
     app.add_handler(CommandHandler("draw", draw))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("leaderboard", leaderboard))
     app.add_handler(CommandHandler("help", help_command))
     print("🤖 TrustWin Bot is running...")
     app.run_polling()
-
-# 🧪 To manually test updates:
-# import requests
-# TOKEN = 'YOUR_BOT_TOKEN'
-# url = f'https://api.telegram.org/bot{TOKEN}/getUpdates'
-# response = requests.get(url)
-# print(response.json())
