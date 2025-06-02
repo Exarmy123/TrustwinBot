@@ -1,16 +1,7 @@
 # requirements.txt
-
 python-telegram-bot==20.7
-supabase>=2.0.4
-httpx>=0.25.2,<0.26.0
+supabase==2.8.1  # इसे पिन करें
+httpx==0.25.2  # इसे भी पिन करें (आपके इंस्टॉलेशन लॉग से)
 pytz
 APScheduler
-
-# अगर आप लोकल डेवलपमेंट के लिए python-dotenv का इस्तेमाल कर रहे हैं,
-# तो नीचे वाली लाइन को uncomment करें (शुरुआत से # हटा दें):
 # python-dotenv
-
-# --- यहां अपने और कोई सीधे पैकेज जोड़ें जिनकी आपको ज़रूरत हो ---
-# उदाहरण:
-# requests
-# Pillow
