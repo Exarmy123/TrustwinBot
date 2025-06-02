@@ -1,6 +1,5 @@
-python-telegram-bot==20.7
+python-telegram-bot[native]>=20.0
+supabase-py
 apscheduler
-requests
-python-dotenv
-asyncio
-supabase
+pytz
+# python-dotenv # Optional for local testing
