@@ -43,8 +43,7 @@ TIMEZONE_STR = os.getenv("TIMEZONE", "Asia/Kolkata")
 logger.debug(f"STAGE 2.0: BOT_TOKEN loaded: {bool(BOT_TOKEN)}")
 logger.debug(f"STAGE 2.1: ADMIN_ID_STR loaded: {bool(ADMIN_ID_STR)}")
 logger.debug(f"STAGE 2.2: USDT_WALLET loaded: {bool(USDT_WALLET)}")
-logger.debug(f"STAGE 2.3: SUPABASE_URL loaded: {bool(SUPABASE_URL)}")
-logger.debug(f"STAGE 2.4: SUPABASE_KEY loaded: {bool(SUPABASE_KEY)}")
+# STAGE 2.3 aur 2.4 ke log neeche Supabase client initialization ke paas move kar diye hain specific value ke saath
 logger.debug(f"STAGE 2.5: TICKET_PRICE_USDT_STR loaded: {bool(TICKET_PRICE_USDT_STR)} (Value: {TICKET_PRICE_USDT_STR})")
 logger.debug(f"STAGE 2.6: REFERRAL_PERCENT_STR loaded: {bool(REFERRAL_PERCENT_STR)} (Value: {REFERRAL_PERCENT_STR})")
 logger.debug(f"STAGE 2.7: GLOBAL_CRYPTO_TAX_PERCENT_STR loaded: {bool(GLOBAL_CRYPTO_TAX_PERCENT_STR)} (Value: {GLOBAL_CRYPTO_TAX_PERCENT_STR})")
@@ -97,15 +96,35 @@ logger.info(f"Prize Pool Contribution Percent: {PRIZE_POOL_CONTRIBUTION_PERCENT*
 
 # --- Supabase Client ---
 logger.info("STAGE 6: Attempting to connect to Supabase.")
+
+# Logging the actual values being used for Supabase connection
+# Note: SUPABASE_KEY poora log karna sensitive ho sakta hai production mein,
+# par debugging ke liye key ka loaded hona check karna zaroori hai.
+# Agar SUPABASE_URL ya SUPABASE_KEY None hai, toh yeh yahan pata chal jayega.
+logger.debug(f"DEBUG STAGE 6 - SUPABASE_URL from env: '{SUPABASE_URL}' (Type: {type(SUPABASE_URL)})")
+if SUPABASE_KEY and len(SUPABASE_KEY) > 10:
+    logger.debug(f"DEBUG STAGE 6 - SUPABASE_KEY from env: '{SUPABASE_KEY[:5]}...{SUPABASE_KEY[-5:]}' (Loaded: True, Type: {type(SUPABASE_KEY)})")
+elif SUPABASE_KEY:
+    logger.debug(f"DEBUG STAGE 6 - SUPABASE_KEY from env: 'Key is short or unusual length' (Loaded: True, Type: {type(SUPABASE_KEY)})")
+else:
+    logger.debug("DEBUG STAGE 6 - SUPABASE_KEY from env: Not loaded or empty (Loaded: False)")
+
 try:
-    # YEH LINE SAHI HAI. Ismein koi 'proxy' argument nahi hai.
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        # Yeh check yahan bhi daal diya hai, just in case upar wala all() miss kar gaya
+        # ya environment variables baad mein None ho gaye (jo ki aam taur par nahi hota)
+        logger.error("FATAL: SUPABASE_URL or SUPABASE_KEY is None before client creation. Exiting.")
+        exit(1)
+        
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     logger.info("STAGE 6.1: Successfully initialized Supabase client.")
 except Exception as e:
-    # Agar yahan error aa raha hai "unexpected keyword argument 'proxy'",
-    # toh iska matlab hai ki jo code run ho raha hai, woh yeh wala nahi hai,
-    # ya fir Supabase library ke kisi specific version mein problem hai.
     logger.error(f"FATAL: Could not initialize Supabase client: {e}. Exiting.")
+    # Additional logging for URL specific errors
+    if "Invalid URL" in str(e) and SUPABASE_URL:
+        logger.error(f"Details for Invalid URL: URL received by client was '{SUPABASE_URL}'")
+    elif "Invalid URL" in str(e) and not SUPABASE_URL:
+        logger.error("Details for Invalid URL: SUPABASE_URL was None or empty when client tried to use it.")
     exit(1)
 
 # --- Global State (for pending payments - Simple in-memory approach) ---
@@ -194,8 +213,6 @@ async def get_total_tickets_for_date(date_obj: datetime.date) -> int:
     """Get the total number of tickets sold on a specific date."""
     logger.debug(f"DB: Getting total tickets for date {date_obj.isoformat()}")
     try:
-        # Assuming 'daily_tickets' has 'telegram_id', 'date', 'count' (tickets by that user for that date)
-        # To get total tickets for a date, we need to sum 'count' for all users on that date.
         response = supabase.from_('daily_tickets').select('count').eq('date', date_obj.isoformat()).execute()
         
         if response.data:
@@ -741,10 +758,7 @@ async def confirm_payment_command(update: Update, context: ContextTypes.DEFAULT_
              user_todays_total_tickets = user_tickets_res.data['count']
         else:
              logger.warning(f"Could not retrieve total daily tickets for user {user_to_confirm_id} after confirmation. Response: {user_tickets_res.data}. Assuming newly purchased are the total for message.")
-             user_todays_total_tickets = num_tickets_purchased # Fallback based on what was just added by RPC
-             # The RPC increment_daily_ticket should ideally return the new total, or the table should have triggers
-             # to correctly sum if multiple entries for same user/date are disallowed in favor of incrementing.
-
+             user_todays_total_tickets = num_tickets_purchased 
         confirmation_text_to_user = (
             f"✅ Your payment for {num_tickets_purchased} ticket(s) ({claimed_payment_amount_by_user:.2f} USDT) is confirmed!\n"
             f"You now have *{user_todays_total_tickets}* ticket(s) registered for today's draw! Good luck! 🍀"
