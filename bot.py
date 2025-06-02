@@ -20,12 +20,14 @@ import pytz
 # --- Logging Configuration (इसे एनवायरनमेंट वेरिएबल लोड होने के ठीक बाद रखें) ---
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.DEBUG # DEBUG पर सेट किया गया
 )
 logger = logging.getLogger(__name__) # logger को यहाँ डिफाइन करें
+logger.info("STAGE 0: Script started, basic logging configured.")
 
 # --- Environment Variables ---
 # load_dotenv() # Uncomment if using a .env file
+logger.info("STAGE 1: Attempting to load environment variables.")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
@@ -38,101 +40,98 @@ REFERRAL_PERCENT_STR = os.getenv("REFERRAL_PERCENT", "0.25")
 GLOBAL_CRYPTO_TAX_PERCENT_STR = os.getenv("GLOBAL_CRYPTO_TAX_PERCENT", "0.25")
 TIMEZONE_STR = os.getenv("TIMEZONE", "Asia/Kolkata")
 
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++ यहाँ डिबगिंग कोड डाला गया है +++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-logger.info("--- STARTING ENV VAR CHECK (DEBUG) ---")
-logger.info(f"BOT_TOKEN is set: {bool(BOT_TOKEN)}")
-logger.info(f"ADMIN_ID_STR is set: {bool(ADMIN_ID_STR)}")
-logger.info(f"USDT_WALLET is set: {bool(USDT_WALLET)}")
-logger.info(f"SUPABASE_URL is set: {bool(SUPABASE_URL)}")
-logger.info(f"SUPABASE_KEY is set: {bool(SUPABASE_KEY)}")
-# आप चाहें तो वैकल्पिक वेरिएबल्स को भी चेक कर सकते हैं
-logger.info(f"TICKET_PRICE_USDT_STR is set: {bool(TICKET_PRICE_USDT_STR)}")
-logger.info(f"REFERRAL_PERCENT_STR is set: {bool(REFERRAL_PERCENT_STR)}")
-logger.info(f"GLOBAL_CRYPTO_TAX_PERCENT_STR is set: {bool(GLOBAL_CRYPTO_TAX_PERCENT_STR)}")
-logger.info(f"TIMEZONE_STR is set: {bool(TIMEZONE_STR)}")
-logger.info("--- FINISHED ENV VAR CHECK (DEBUG) ---")
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++ डिबगिंग कोड का अंत +++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
+logger.debug(f"STAGE 2.0: BOT_TOKEN loaded: {bool(BOT_TOKEN)}")
+logger.debug(f"STAGE 2.1: ADMIN_ID_STR loaded: {bool(ADMIN_ID_STR)}")
+logger.debug(f"STAGE 2.2: USDT_WALLET loaded: {bool(USDT_WALLET)}")
+logger.debug(f"STAGE 2.3: SUPABASE_URL loaded: {bool(SUPABASE_URL)}")
+logger.debug(f"STAGE 2.4: SUPABASE_KEY loaded: {bool(SUPABASE_KEY)}")
+logger.debug(f"STAGE 2.5: TICKET_PRICE_USDT_STR loaded: {bool(TICKET_PRICE_USDT_STR)} (Value: {TICKET_PRICE_USDT_STR})")
+logger.debug(f"STAGE 2.6: REFERRAL_PERCENT_STR loaded: {bool(REFERRAL_PERCENT_STR)} (Value: {REFERRAL_PERCENT_STR})")
+logger.debug(f"STAGE 2.7: GLOBAL_CRYPTO_TAX_PERCENT_STR loaded: {bool(GLOBAL_CRYPTO_TAX_PERCENT_STR)} (Value: {GLOBAL_CRYPTO_TAX_PERCENT_STR})")
+logger.debug(f"STAGE 2.8: TIMEZONE_STR loaded: {bool(TIMEZONE_STR)} (Value: {TIMEZONE_STR})")
 
 # Validate and convert environment variables
 if not all([BOT_TOKEN, ADMIN_ID_STR, USDT_WALLET, SUPABASE_URL, SUPABASE_KEY]):
-    logger.error("FATAL: Missing required core environment variables!")
-    # --- कौन सा खास वेरिएबल गायब है, यह देखने के लिए और डिबगिंग ---
+    logger.error("FATAL: Missing required core environment variables! Exiting.")
     if not BOT_TOKEN: logger.error("DEBUG CHECK: BOT_TOKEN specifically is missing or empty.")
     if not ADMIN_ID_STR: logger.error("DEBUG CHECK: ADMIN_ID_STR (for ADMIN_ID key) specifically is missing or empty.")
     if not USDT_WALLET: logger.error("DEBUG CHECK: USDT_WALLET specifically is missing or empty.")
     if not SUPABASE_URL: logger.error("DEBUG CHECK: SUPABASE_URL specifically is missing or empty.")
     if not SUPABASE_KEY: logger.error("DEBUG CHECK: SUPABASE_KEY specifically is missing or empty.")
-    # --- डिबगिंग का अंत ---
-    exit(1) # बॉट को यहाँ बंद कर दें अगर मुख्य वेरिएबल्स नहीं हैं
+    exit(1)
+logger.info("STAGE 3: Core environment variables validated.")
 
 try:
     ADMIN_ID = int(ADMIN_ID_STR)
     TICKET_PRICE_USDT = Decimal(TICKET_PRICE_USDT_STR)
     REFERRAL_PERCENT = Decimal(REFERRAL_PERCENT_STR)
     GLOBAL_CRYPTO_TAX_PERCENT = Decimal(GLOBAL_CRYPTO_TAX_PERCENT_STR)
+    logger.info("STAGE 4.0: Basic numeric environment variables converted.")
 
     if not (Decimal(0) <= REFERRAL_PERCENT <= Decimal(1)):
-        logger.error("FATAL: REFERRAL_PERCENT must be between 0 and 1 (e.g., 0.25 for 25%).")
+        logger.error("FATAL: REFERRAL_PERCENT must be between 0 and 1. Exiting.")
         exit(1)
     if not (Decimal(0) <= GLOBAL_CRYPTO_TAX_PERCENT <= Decimal(1)):
-        logger.error("FATAL: GLOBAL_CRYPTO_TAX_PERCENT must be between 0 and 1 (e.g., 0.25 for 25%).")
+        logger.error("FATAL: GLOBAL_CRYPTO_TAX_PERCENT must be between 0 and 1. Exiting.")
         exit(1)
     if (REFERRAL_PERCENT + GLOBAL_CRYPTO_TAX_PERCENT) > Decimal(1):
-        logger.error("FATAL: Sum of REFERRAL_PERCENT and GLOBAL_CRYPTO_TAX_PERCENT cannot exceed 1 (100%).")
+        logger.error("FATAL: Sum of REFERRAL_PERCENT and GLOBAL_CRYPTO_TAX_PERCENT cannot exceed 1. Exiting.")
         exit(1)
+    logger.info("STAGE 4.1: Percentage variables validated.")
 
 except ValueError as e:
-    logger.error(f"FATAL: Invalid format for numeric environment variables (ADMIN_ID, TICKET_PRICE_USDT, REFERRAL_PERCENT, GLOBAL_CRYPTO_TAX_PERCENT): {e}")
+    logger.error(f"FATAL: Invalid format for numeric environment variables: {e}. Exiting.")
     exit(1)
 
 # Calculate Prize Pool Contribution Percentage
 PRIZE_POOL_CONTRIBUTION_PERCENT = Decimal(1) - REFERRAL_PERCENT - GLOBAL_CRYPTO_TAX_PERCENT
 if PRIZE_POOL_CONTRIBUTION_PERCENT < Decimal(0):
-    logger.error("FATAL: Prize pool contribution percentage is negative. Check referral and tax percentages.")
+    logger.error("FATAL: Prize pool contribution percentage is negative. Check referral and tax percentages. Exiting.")
     exit(1)
+logger.info("STAGE 5: Prize pool contribution calculated.")
 
-# लॉगिंग को यहाँ करें, जब सभी वेरिएबल्स प्रोसेस हो चुके हों
 logger.info(f"Ticket Price: {TICKET_PRICE_USDT} USDT")
 logger.info(f"Referral Percent: {REFERRAL_PERCENT*100}%")
 logger.info(f"Global Crypto Tax Percent: {GLOBAL_CRYPTO_TAX_PERCENT*100}%")
 logger.info(f"Prize Pool Contribution Percent: {PRIZE_POOL_CONTRIBUTION_PERCENT*100}%")
 
-
 # --- Supabase Client ---
+logger.info("STAGE 6: Attempting to connect to Supabase.")
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    logger.info("Successfully connected to Supabase.")
+    logger.info("STAGE 6.1: Successfully initialized Supabase client.")
 except Exception as e:
-    logger.error(f"FATAL: Could not initialize Supabase client: {e}")
+    logger.error(f"FATAL: Could not initialize Supabase client: {e}. Exiting.")
     exit(1)
 
 # --- Global State (for pending payments - Simple in-memory approach) ---
 pending_payments = {} # {user_id: {amount_paid: Decimal, num_tickets: int, message_id: int, date: date, chat_id: int}}
+logger.debug("STAGE 7: Global state 'pending_payments' initialized.")
 
 # --- Helper Functions: Database ---
+# (इन फंक्शन्स के अंदर लॉगिंग पहले से ही ठीक-ठाक है, इसलिए उनमें STAGE लॉग्स नहीं जोड़े हैं)
 
 async def get_user(telegram_id: int):
     """Fetch a user from the database by telegram_id."""
+    logger.debug(f"DB: Attempting to get user {telegram_id}")
     try:
         response = supabase.from_('users').select('*').eq('telegram_id', telegram_id).single().execute()
+        logger.debug(f"DB: Get user {telegram_id} response: {response.data is not None}")
         return response.data
     except Exception as e:
         if hasattr(e, 'message') and "PGRST116" in e.message and "0 rows" in e.message:
             logger.debug(f"Supabase: User {telegram_id} not found (0 rows for single()).")
-        elif hasattr(e, 'code') and e.code == 'PGRST116':
+        elif hasattr(e, 'code') and e.code == 'PGRST116': # For supabase-py v1
             logger.debug(f"Supabase: User {telegram_id} not found (PGRST116 for single()).")
+        elif hasattr(e, 'details') and 'PGRST116' in e.details: # For supabase-py v2
+             logger.debug(f"Supabase: User {telegram_id} not found (PGRST116 from details for single()).")
         else:
             logger.error(f"Supabase error fetching user {telegram_id}: {e}")
         return None
 
 async def create_user(telegram_id: int, username: str | None, first_name: str | None, last_name: str | None, referrer_telegram_id: int | None = None):
     """Create a new user in the database."""
+    logger.debug(f"DB: Attempting to create user {telegram_id}")
     try:
         data_to_insert = {
             'telegram_id': telegram_id,
@@ -149,8 +148,11 @@ async def create_user(telegram_id: int, username: str | None, first_name: str | 
         error_msg = "Unknown error"
         if response.error:
             error_msg = response.error.message
-            if hasattr(response.error, 'details'):
+            if hasattr(response.error, 'details'): # supabase-py v1
                 error_msg += f" Details: {response.error.details}"
+            elif hasattr(response.error, 'hint') and response.error.hint: # supabase-py v2
+                error_msg += f" Hint: {response.error.hint}"
+
         logger.error(f"Supabase error creating user {telegram_id}: {error_msg}")
         return None
     except Exception as e:
@@ -159,6 +161,7 @@ async def create_user(telegram_id: int, username: str | None, first_name: str | 
 
 async def increment_daily_tickets_for_user(telegram_id: int, num_tickets: int = 1):
     """Increment ticket count for a user for today's date using RPC."""
+    logger.debug(f"DB: Attempting to increment {num_tickets} tickets for user {telegram_id} via RPC.")
     if num_tickets <= 0:
         logger.warning(f"Attempted to increment 0 or negative tickets for user {telegram_id}.")
         return False
@@ -170,25 +173,37 @@ async def increment_daily_tickets_for_user(telegram_id: int, num_tickets: int = 
             'num_tickets_to_add': num_tickets
         }).execute()
 
+        # Supabase-py v2+ RPCs that return void might not have an error attribute on success
+        # and data might be None. The absence of an error is success.
         if hasattr(response, 'error') and response.error:
              logger.error(f"Supabase RPC error incrementing {num_tickets} tickets for {telegram_id} on {today_iso}: {response.error.message}")
              return False
-        # For supabase-py v2, a successful void RPC might return None or no error attribute.
-        # If an error occurs, it should ideally raise an exception or set response.error.
-        # The check above handles explicit .error. If it passes, assume success.
+        
         logger.info(f"{num_tickets} tickets incremented via RPC for user {telegram_id} for {today_iso}.")
         return True
-    except Exception as e:
+    except Exception as e: # Catching potential PostgrestAPIError or others
         logger.error(f"Exception calling RPC increment_daily_ticket for user {telegram_id} ({num_tickets} tickets): {e}")
+        # Log more details if it's a Postgrest error
+        if hasattr(e, 'message'): logger.error(f"RPC Exception details: {e.message}")
+        if hasattr(e, 'details'): logger.error(f"RPC Exception details: {e.details}")
+        if hasattr(e, 'hint'): logger.error(f"RPC Exception hint: {e.hint}")
         return False
 
 
 async def get_total_tickets_for_date(date_obj: datetime.date) -> int:
     """Get the total number of tickets sold on a specific date."""
+    logger.debug(f"DB: Getting total tickets for date {date_obj.isoformat()}")
     try:
-        response = supabase.from_('daily_tickets').select('count').eq('date', date_obj.isoformat()).execute()
+        response = supabase.from_('daily_tickets').select('count', count='exact').eq('date', date_obj.isoformat()).execute()
+        # The structure of count response changed in supabase-py.
+        # If using `count='exact'`, the count is in `response.count`.
+        # If selecting a 'count' column, it's in `response.data`.
+        # Your code sums a 'count' column.
         if response.data:
-            return sum(item['count'] for item in response.data if isinstance(item.get('count'), int))
+            total = sum(item['count'] for item in response.data if isinstance(item.get('count'), int))
+            logger.debug(f"DB: Total tickets for {date_obj.isoformat()}: {total}")
+            return total
+        logger.debug(f"DB: No ticket data found for {date_obj.isoformat()}")
         return 0
     except Exception as e:
         logger.error(f"Supabase error fetching total tickets for {date_obj}: {e}")
@@ -196,8 +211,10 @@ async def get_total_tickets_for_date(date_obj: datetime.date) -> int:
 
 async def get_daily_ticket_entries_for_draw(date_obj: datetime.date) -> list:
     """Get all individual ticket entries (telegram_id, count) for a specific date."""
+    logger.debug(f"DB: Getting daily ticket entries for draw on {date_obj.isoformat()}")
     try:
         response = supabase.from_('daily_tickets').select('telegram_id, count').eq('date', date_obj.isoformat()).execute()
+        logger.debug(f"DB: Fetched {len(response.data) if response.data else 0} entries for draw on {date_obj.isoformat()}")
         return response.data if response.data else []
     except Exception as e:
         logger.error(f"Supabase error fetching daily ticket entries for {date_obj} for draw: {e}")
@@ -205,17 +222,18 @@ async def get_daily_ticket_entries_for_draw(date_obj: datetime.date) -> list:
 
 async def add_winner_record(telegram_id: int, amount: Decimal, win_date: datetime.date):
     """Add a winner entry to the database."""
+    logger.debug(f"DB: Adding winner record for {telegram_id}, amount {amount}, date {win_date.isoformat()}")
     try:
         data_to_insert = {
             'telegram_id': telegram_id,
-            'amount': float(amount),
+            'amount': float(amount), # Supabase numeric typically maps to float
             'win_date': win_date.isoformat()
         }
         response = supabase.from_('winners').insert([data_to_insert]).execute()
         if response.data:
             logger.info(f"Winner recorded: {telegram_id} on {win_date} with {amount:.2f} USDT")
             return response.data[0]
-        error_msg = response.error.message if response.error else "Unknown error"
+        error_msg = response.error.message if response.error else "Unknown error adding winner"
         logger.error(f"Supabase error adding winner {telegram_id}: {error_msg}")
         return None
     except Exception as e:
@@ -224,15 +242,29 @@ async def add_winner_record(telegram_id: int, amount: Decimal, win_date: datetim
 
 async def get_latest_winners(limit: int = 7):
     """Fetch the latest winners from the database, including user info."""
+    logger.debug(f"DB: Getting latest {limit} winners.")
     try:
+        # First, get winners
         winners_response = supabase.from_('winners').select('telegram_id, amount, win_date').order('win_date', desc=True).limit(limit).execute()
         if not winners_response.data:
+            logger.debug("DB: No winners found.")
             return []
+        
+        logger.debug(f"DB: Found {len(winners_response.data)} raw winner entries.")
         winner_telegram_ids = [w['telegram_id'] for w in winners_response.data]
+
+        if not winner_telegram_ids:
+             return winners_response.data # Should not happen if winners_response.data is not empty
+
+        # Then, get user info for these winners
         users_response = supabase.from_('users').select('telegram_id, username, first_name').in_('telegram_id', winner_telegram_ids).execute()
         user_map = {user['telegram_id']: user for user in users_response.data} if users_response.data else {}
+        logger.debug(f"DB: Fetched user info for {len(user_map)} winners.")
+
+        # Combine winner data with user info
         for winner in winners_response.data:
             winner['user_info'] = user_map.get(winner['telegram_id'])
+        
         return winners_response.data
     except Exception as e:
         logger.error(f"Supabase error fetching latest winners: {e}")
@@ -240,29 +272,44 @@ async def get_latest_winners(limit: int = 7):
 
 async def get_all_user_telegram_ids() -> list[int]:
     """Fetch all user telegram_ids for broadcasting."""
+    logger.debug("DB: Getting all user telegram_ids.")
     try:
         response = supabase.from_('users').select('telegram_id').execute()
-        return [user['telegram_id'] for user in response.data] if response.data else []
+        ids = [user['telegram_id'] for user in response.data] if response.data else []
+        logger.debug(f"DB: Found {len(ids)} user telegram_ids.")
+        return ids
     except Exception as e:
         logger.error(f"Supabase error fetching all user telegram_ids: {e}")
         return []
 
 async def get_total_users_count() -> int:
     """Get the total count of users."""
+    logger.debug("DB: Getting total users count.")
     try:
-        response = supabase.from_('users').select('telegram_id', count='exact').limit(0).execute()
-        return response.count if response.count is not None else 0
+        # Using `count='exact'` is more efficient
+        response = supabase.from_('users').select('telegram_id', count='exact').limit(0).execute() # limit(0) with count is a common pattern
+        count = response.count if response.count is not None else 0
+        logger.debug(f"DB: Total users count: {count}")
+        return count
     except Exception as e:
         logger.error(f"Supabase error fetching total users count: {e}")
         return 0
 
 async def get_random_marketing_message_content() -> str | None:
     """Fetch a random marketing message from the database."""
+    logger.debug("DB: Getting random marketing message.")
     try:
         response = supabase.from_('messages').select('content').eq('type', 'marketing').execute()
         if response.data:
             messages = [msg['content'] for msg in response.data if msg.get('content')]
-            return random.choice(messages) if messages else None
+            if messages:
+                selected_message = random.choice(messages)
+                logger.debug("DB: Random marketing message selected.")
+                return selected_message
+            else:
+                logger.debug("DB: No marketing messages with content found.")
+                return None
+        logger.debug("DB: No marketing messages found in table.")
         return None
     except Exception as e:
         logger.error(f"Supabase error fetching marketing message: {e}")
@@ -271,320 +318,723 @@ async def get_random_marketing_message_content() -> str | None:
 # --- Helper: Calculate Dynamic Prize ---
 async def calculate_prize_for_date(date_obj: datetime.date) -> Decimal:
     """Calculates the winner prize for a given date based on ticket sales."""
+    logger.debug(f"CALC: Calculating prize for date {date_obj.isoformat()}")
     total_tickets_sold_on_date = await get_total_tickets_for_date(date_obj)
     logger.info(f"Total tickets sold on {date_obj.isoformat()} for prize calculation: {total_tickets_sold_on_date}")
     if total_tickets_sold_on_date == 0:
+        logger.debug(f"CALC: No tickets sold on {date_obj.isoformat()}, prize is 0.")
         return Decimal("0.00")
     total_revenue_from_tickets = total_tickets_sold_on_date * TICKET_PRICE_USDT
     prize_amount = total_revenue_from_tickets * PRIZE_POOL_CONTRIBUTION_PERCENT
-    return prize_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    final_prize = prize_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    logger.debug(f"CALC: Prize for {date_obj.isoformat()} calculated: {final_prize} USDT")
+    return final_prize
 
 # --- Helper Functions: USDT Simulation & Broadcast ---
 async def simulate_send_usdt(recipient_info: str, amount: Decimal, transaction_type: str):
     logger.info(f"SIMULATING USDT SEND: Type='{transaction_type}', Recipient='{recipient_info}', Amount='{amount:.2f} USDT'")
-    await asyncio.sleep(random.uniform(0.5, 1.2))
+    await asyncio.sleep(random.uniform(0.5, 1.2)) # Simulate network delay
     logger.info(f"SIMULATION COMPLETE: USDT sent successfully (simulated).")
-    return True
+    return True # Simulate success
 
 async def broadcast_message_to_users_list(context: ContextTypes.DEFAULT_TYPE, user_ids: list[int], text: str, parse_mode: str | None = None):
-    sent_count = 0; failed_count = 0; tasks = []
+    sent_count = 0
+    failed_count = 0
+    tasks = []
+    logger.debug(f"BROADCAST: Preparing to send to {len(user_ids)} users.")
+
     async def send_single_message(user_id_to_send: int):
-        nonlocal sent_count, failed_count
+        nonlocal sent_count, failed_count # Ensure these are the outer scope variables
         try:
             await context.bot.send_message(chat_id=user_id_to_send, text=text, parse_mode=parse_mode)
             sent_count += 1
+            logger.debug(f"BROADCAST: Message sent to {user_id_to_send}")
         except Exception as e:
-            logger.warning(f"Failed to send broadcast message to user {user_id_to_send}: {e}"); failed_count +=1
-    for user_id in user_ids: tasks.append(send_single_message(user_id))
-    if tasks: await asyncio.gather(*tasks)
-    logger.info(f"Broadcast attempt finished. Sent: {sent_count}, Failed: {failed_count} out of {len(user_ids)} users.")
+            logger.warning(f"BROADCAST: Failed to send message to user {user_id_to_send}: {e}")
+            failed_count +=1
+            
+    for user_id in user_ids:
+        tasks.append(send_single_message(user_id))
+    
+    if tasks:
+        await asyncio.gather(*tasks)
+    
+    logger.info(f"BROADCAST: Attempt finished. Sent: {sent_count}, Failed: {failed_count} out of {len(user_ids)} users.")
 
 # --- Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user;
-    if not user: logger.warning("Start command received without an effective_user."); return
-    telegram_id = user.id; username = user.username; first_name = user.first_name or "User"; last_name = user.last_name
+    logger.debug("HANDLER: start_command invoked.")
+    user = update.effective_user
+    if not user:
+        logger.warning("Start command received without an effective_user. Skipping.")
+        return
+
+    telegram_id = user.id
+    username = user.username
+    first_name = user.first_name or "User" # Default to "User" if no first name
+    last_name = user.last_name
+    logger.info(f"Start command from user: {telegram_id} ({first_name} @{username})")
+
     referrer_telegram_id = None
     if context.args:
+        logger.debug(f"Start command args: {context.args}")
         try:
             potential_referrer_id = int(context.args[0])
             if potential_referrer_id != telegram_id:
                 referrer_user = await get_user(potential_referrer_id)
-                if referrer_user: referrer_telegram_id = potential_referrer_id; logger.info(f"User {telegram_id} ({username or first_name}) started with referrer {referrer_telegram_id}")
-                else: logger.warning(f"User {telegram_id} used invalid referrer ID (not found): {context.args[0]}")
-            else: logger.warning(f"User {telegram_id} tried to refer themselves.")
-        except (ValueError, IndexError): logger.warning(f"User {telegram_id} used invalid referral link format or no valid arg: {context.args}")
+                if referrer_user:
+                    referrer_telegram_id = potential_referrer_id
+                    logger.info(f"User {telegram_id} started with referrer {referrer_telegram_id}")
+                else:
+                    logger.warning(f"User {telegram_id} used invalid referrer ID (not found): {context.args[0]}")
+            else:
+                logger.warning(f"User {telegram_id} tried to refer themselves.")
+        except (ValueError, IndexError):
+            logger.warning(f"User {telegram_id} used invalid referral link format or no valid arg: {context.args}")
 
-    db_user = await get_user(telegram_id); is_new_user = db_user is None
-    today_date = datetime.date.today(); potential_todays_prize = await calculate_prize_for_date(today_date)
-    welcome_message_parts = [f"Hello {first_name}! Welcome to TrustWin Bot!", "Get your tickets daily for a chance to win big in our USDT lottery!"]
+    db_user = await get_user(telegram_id)
+    is_new_user = db_user is None
+    logger.debug(f"User {telegram_id} is_new_user: {is_new_user}")
+
+    today_date = datetime.date.today()
+    potential_todays_prize = await calculate_prize_for_date(today_date)
+    logger.debug(f"Potential today's prize for welcome message: {potential_todays_prize:.2f} USDT")
+
+    welcome_message_parts = [
+        f"Hello {first_name}! Welcome to TrustWin Bot!",
+        "Get your tickets daily for a chance to win big in our USDT lottery!"
+    ]
+
     if is_new_user:
+        logger.info(f"User {telegram_id} is new. Creating entry...")
         created_user = await create_user(telegram_id, username, first_name, last_name, referrer_telegram_id)
         if created_user:
             welcome_message_parts.append("You've been registered! Thanks for joining.")
+            logger.info(f"User {telegram_id} successfully registered.")
             if referrer_telegram_id:
                 try:
                     new_user_display_name = first_name + (f" (@{username})" if username else "")
-                    await context.bot.send_message(chat_id=referrer_telegram_id, text=f"Great news! Your referral {new_user_display_name} has joined TrustWin Bot using your link!\nYou'll earn {REFERRAL_PERCENT*100:.0f}% of the ticket price every time they buy a ticket!")
+                    referral_notification_text = (
+                        f"Great news! Your referral {new_user_display_name} has joined TrustWin Bot using your link!\n"
+                        f"You'll earn {REFERRAL_PERCENT*100:.0f}% of the ticket price every time they buy a ticket!"
+                    )
+                    await context.bot.send_message(chat_id=referrer_telegram_id, text=referral_notification_text)
                     logger.info(f"Notified referrer {referrer_telegram_id} about new user {telegram_id}")
-                except Exception as e: logger.warning(f"Could not notify referrer {referrer_telegram_id}: {e}")
-        else: welcome_message_parts.append("There was an issue registering you. Please try /start again later.")
-    welcome_message_parts.extend([f"\nToday's *potential* prize pool is currently around *{potential_todays_prize:.2f} USDT*.", "(This grows as more tickets are sold today for *tomorrow's* draw).", f"Each ticket costs *{TICKET_PRICE_USDT:.2f} USDT*.", "\nUse the /buy command to get your ticket(s)!", f"\nWant to earn passively? Share your unique referral link:", f"`https://t.me/{context.bot.username}?start={telegram_id}`", f"You get {REFERRAL_PERCENT*100:.0f}% of the ticket price for every ticket your referred friends buy, FOREVER!", "\nMay the odds be ever in your favor!"])
+                except Exception as e:
+                    logger.warning(f"Could not notify referrer {referrer_telegram_id}: {e}")
+        else:
+            welcome_message_parts.append("There was an issue registering you. Please try /start again later.")
+            logger.error(f"Failed to register new user {telegram_id}.")
+    
+    welcome_message_parts.extend([
+        f"\nToday's *potential* prize pool is currently around *{potential_todays_prize:.2f} USDT*.",
+        "(This grows as more tickets are sold today for *tomorrow's* draw).",
+        f"Each ticket costs *{TICKET_PRICE_USDT:.2f} USDT*.",
+        "\nUse the /buy command to get your ticket(s)!",
+        f"\nWant to earn passively? Share your unique referral link:",
+        f"`https://t.me/{context.bot.username}?start={telegram_id}`",
+        f"You get {REFERRAL_PERCENT*100:.0f}% of the ticket price for every ticket your referred friends buy, FOREVER!",
+        "\nMay the odds be ever in your favor!"
+    ])
     welcome_message = "\n".join(welcome_message_parts)
-    if update.message: await update.message.reply_text(welcome_message, parse_mode=ParseMode.MARKDOWN)
-    else: logger.warning("Start command invoked without a message attribute in update.")
+
+    if update.message:
+        await update.message.reply_text(welcome_message, parse_mode=ParseMode.MARKDOWN)
+        logger.debug(f"Welcome message sent to {telegram_id}")
+    else:
+        logger.warning("Start command invoked without a message attribute in update. Cannot send reply.")
+
 
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user;
-    if not user: logger.warning("Buy command received without an effective_user."); return
+    logger.debug("HANDLER: buy_command invoked.")
+    user = update.effective_user
+    if not user:
+        logger.warning("Buy command received without an effective_user. Skipping.")
+        return
+    
     telegram_id = user.id
-    db_user = await get_user(telegram_id);
+    logger.info(f"Buy command from user: {telegram_id}")
+
+    db_user = await get_user(telegram_id)
     if not db_user:
-        if update.message: await update.message.reply_text("Please use the /start command first to register."); return
-    num_tickets_to_buy = 1; total_payment_due = num_tickets_to_buy * TICKET_PRICE_USDT
+        if update.message:
+            await update.message.reply_text("Please use the /start command first to register.")
+            logger.info(f"User {telegram_id} tried /buy without being registered.")
+        return
+
+    num_tickets_to_buy = 1 # Defaulting to 1 ticket for simplicity in this version
+    total_payment_due = num_tickets_to_buy * TICKET_PRICE_USDT
     callback_data_string = f"paid_{total_payment_due}_{num_tickets_to_buy}"
+    logger.debug(f"Buy command: {num_tickets_to_buy} ticket(s), total due {total_payment_due:.2f} USDT, callback_data: {callback_data_string}")
+
     keyboard = [[InlineKeyboardButton(f"I have paid {total_payment_due:.2f} USDT", callback_data=callback_data_string)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    message_text = (f"To buy {num_tickets_to_buy} ticket(s) for *{total_payment_due:.2f} USDT*:\n\n"
-                    f"1. Send exactly *{total_payment_due:.2f} USDT (TRC-20)* to the following wallet address:\n"
-                    f"`{USDT_WALLET}`\n\n"
-                    "2. After sending, click the 'I have paid' button below.\n\n"
-                    "Your ticket(s) will be counted for today's draw after admin verification. Good luck!")
-    if update.message: await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+    
+    message_text = (
+        f"To buy {num_tickets_to_buy} ticket(s) for *{total_payment_due:.2f} USDT*:\n\n"
+        f"1. Send exactly *{total_payment_due:.2f} USDT (TRC-20)* to the following wallet address:\n"
+        f"`{USDT_WALLET}`\n\n"
+        "2. After sending, click the 'I have paid' button below.\n\n"
+        "Your ticket(s) will be counted for today's draw after admin verification. Good luck!"
+    )
+
+    if update.message:
+        await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+        logger.debug(f"Buy instruction message sent to {telegram_id}")
+    else:
+        logger.warning("Buy command invoked without message attribute. Cannot send reply.")
+
 
 async def paid_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query;
-        # यह लाइन (और इसके नीचे की कुछ लाइनें) पुरानी लाइन 357 की जगह लेंगी
+    logger.debug("HANDLER: paid_button_callback invoked.")
+    query = update.callback_query
+
     if not query or not query.message:
         logger.error("paid_button_callback: invalid query or no message.")
-        if query:  # यह सुनिश्चित करने के लिए कि query None नहीं है
-            await query.answer("Error processing your request.", show_alert=True)
-        return # फंक्शन से बाहर निकलें
+        if query:  # Check if query object exists before trying to answer
+            try:
+                await query.answer("Error processing your request.", show_alert=True)
+            except Exception as e_ans:
+                 logger.error(f"Error sending answer in paid_button_callback for invalid query: {e_ans}")
+        return
 
-    # इसके बाद आपका user = query.effective_user; वाला कोड शुरू होगा
-    user = query.effective_user;
-    if not user: logger.error("paid_button_callback: no effective_user."); await query.answer("Error: No user.", show_alert=True); return
-    telegram_id = user.id; data = query.data
-    await query.answer("Processing...")
+    user = query.effective_user
+    if not user:
+        logger.error("paid_button_callback: no effective_user.")
+        await query.answer("Error: No user identified.", show_alert=True)
+        return
+    
+    telegram_id = user.id
+    data = query.data
+    logger.info(f"Paid button callback from user {telegram_id} with data: {data}")
+    
+    # It's good practice to answer the callback query quickly
+    await query.answer("Processing...") 
+    logger.debug(f"Initial 'Processing...' answer sent to callback query from {telegram_id}")
+
     try:
-        parts = data.split('_');
-        if len(parts) != 3 or parts[0] != 'paid': raise ValueError("Callback format error")
-        claimed_amount_paid = Decimal(parts[1]); num_tickets_claimed = int(parts[2])
+        parts = data.split('_')
+        if len(parts) != 3 or parts[0] != 'paid':
+            logger.error(f"Invalid callback data format: '{data}' for user {telegram_id}")
+            raise ValueError("Callback format error")
+        
+        claimed_amount_paid_str = parts[1]
+        num_tickets_claimed_str = parts[2]
+        
+        claimed_amount_paid = Decimal(claimed_amount_paid_str)
+        num_tickets_claimed = int(num_tickets_claimed_str)
+        logger.debug(f"User {telegram_id} claims paid {claimed_amount_paid} for {num_tickets_claimed} tickets.")
+
         expected_amount_for_tickets = (num_tickets_claimed * TICKET_PRICE_USDT).quantize(Decimal("0.01"))
+
         if claimed_amount_paid.quantize(Decimal("0.01")) != expected_amount_for_tickets:
-            error_msg = (f"Payment amount mismatch. Expected {expected_amount_for_tickets:.2f} for {num_tickets_claimed} ticket(s), claimed {claimed_amount_paid:.2f}. Contact admin or /buy again.")
-            await query.edit_message_text(error_msg); logger.error(f"Payment mismatch user {telegram_id}: claimed {claimed_amount_paid}, expected {expected_amount_for_tickets} for {num_tickets_claimed} tickets."); return
+            error_msg = (
+                f"Payment amount mismatch. Expected {expected_amount_for_tickets:.2f} for {num_tickets_claimed} ticket(s), "
+                f"claimed {claimed_amount_paid:.2f}. Please contact admin or use /buy again with the correct amount."
+            )
+            await query.edit_message_text(error_msg)
+            logger.error(f"Payment mismatch for user {telegram_id}: claimed {claimed_amount_paid}, expected {expected_amount_for_tickets} for {num_tickets_claimed} tickets.")
+            return
+        
     except (IndexError, ValueError, TypeError) as e:
-        await query.edit_message_text("Invalid payment data. Try /buy again."); logger.error(f"Invalid callback data: '{data}' user {telegram_id}. Error: {e}"); return
-    pending_payments[telegram_id] = {'amount_paid': claimed_amount_paid, 'num_tickets': num_tickets_claimed, 'date': datetime.date.today(), 'message_id': query.message.message_id, 'chat_id': query.message.chat_id}
-    admin_notification_text = (f"Payment Claimed!\n\nUser: {user.first_name or 'N/A'} (@{user.username or 'N/A'}) [ID: `{telegram_id}`]\n"
-                               f"Claimed for: *{num_tickets_claimed} ticket(s)* (Total {claimed_amount_paid:.2f} USDT)\nClaim Date: {datetime.date.today().isoformat()}\n\n"
-                               f"Check payment and use `/confirm_payment {telegram_id}` if verified.")
+        await query.edit_message_text("There was an issue with your payment claim data. Please try the /buy command again.")
+        logger.error(f"Invalid callback data processing for user {telegram_id}: data='{data}', Error: {e}")
+        return
+
+    # If data is valid, store pending payment
+    pending_payments[telegram_id] = {
+        'amount_paid': claimed_amount_paid,
+        'num_tickets': num_tickets_claimed,
+        'date': datetime.date.today(), # Store as date object
+        'message_id': query.message.message_id,
+        'chat_id': query.message.chat_id
+    }
+    logger.info(f"Pending payment for user {telegram_id} recorded: {num_tickets_claimed} tickets, {claimed_amount_paid:.2f} USDT.")
+
+    admin_notification_text = (
+        f"🔔 Payment Claimed! 🔔\n\n"
+        f"User: {user.first_name or 'N/A'} (@{user.username or 'N/A'}) [ID: `{telegram_id}`]\n"
+        f"Claimed for: *{num_tickets_claimed} ticket(s)* (Total {claimed_amount_paid:.2f} USDT)\n"
+        f"Claim Date: {datetime.date.today().isoformat()}\n\n"
+        f"➡️ Please verify payment and use `/confirm_payment {telegram_id}` if correct."
+    )
+
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification_text, parse_mode=ParseMode.MARKDOWN)
-        logger.info(f"Admin {ADMIN_ID} notified: pending payment from {telegram_id} for {num_tickets_claimed} tickets.")
-        await query.edit_message_text(f"Received your payment confirmation for {num_tickets_claimed} ticket(s) ({claimed_amount_paid:.2f} USDT).\nAdmin will verify. Tickets added shortly!")
+        logger.info(f"Admin {ADMIN_ID} notified about pending payment from {telegram_id}.")
+        
+        await query.edit_message_text(
+            f"✅ Received your payment confirmation for {num_tickets_claimed} ticket(s) ({claimed_amount_paid:.2f} USDT).\n"
+            f"The admin will verify your payment shortly. Once confirmed, your tickets will be added for today's draw!"
+        )
+        logger.debug(f"User {telegram_id} notified about pending verification.")
+
     except Exception as e:
-        logger.error(f"Failed to notify admin or edit user msg for {telegram_id}: {e}")
-        try: await context.bot.send_message(chat_id=telegram_id, text=f"Received confirmation for {num_tickets_claimed} ticket(s).\nIssue notifying admin, but claim recorded. Wait for verification.")
-        except Exception as e_user_notify: logger.error(f"Also failed to send direct notification to user {telegram_id}: {e_user_notify}")
+        logger.error(f"Failed to notify admin or edit user message for {telegram_id}'s payment claim: {e}")
+        # Try to send a direct message to the user if editing failed, as a fallback
+        try:
+            await context.bot.send_message(
+                chat_id=telegram_id, 
+                text=(f"Received your payment confirmation for {num_tickets_claimed} ticket(s).\n"
+                      f"There was an issue updating the original message, but your claim is recorded.\n"
+                      f"Admin will verify. Thank you!")
+            )
+        except Exception as e_user_notify_fallback:
+            logger.error(f"Also failed to send direct fallback notification to user {telegram_id}: {e_user_notify_fallback}")
 
 # --- Admin Decorator ---
 def admin_only(handler):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logger.debug(f"ADMIN_DECORATOR: Checking access for handler {handler.__name__}")
         user_to_check = update.effective_user
         if not user_to_check or user_to_check.id != ADMIN_ID:
-            if update.message: await update.message.reply_text("You are not authorized.")
-            elif update.callback_query: await update.callback_query.answer("Not authorized.", show_alert=True)
-            logger.warning(f"Unauthorized access: user {user_to_check.id if user_to_check else 'Unknown'} for admin cmd.")
+            if update.message:
+                await update.message.reply_text("You are not authorized to use this command.")
+            elif update.callback_query:
+                await update.callback_query.answer("You are not authorized for this action.", show_alert=True)
+            logger.warning(f"Unauthorized access attempt: user {user_to_check.id if user_to_check else 'Unknown'} for admin command {handler.__name__}.")
             return
+        logger.debug(f"ADMIN_DECORATOR: Access granted for user {user_to_check.id} to {handler.__name__}")
         await handler(update, context)
     return wrapper
 
 # --- Admin Commands ---
 @admin_only
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message: return
-    total_users = await get_total_users_count(); todays_total_tickets_sold = await get_total_tickets_for_date(datetime.date.today())
-    pending_count = len(pending_payments); potential_prize_for_tomorrows_draw = await calculate_prize_for_date(datetime.date.today())
-    prize_for_todays_draw = await calculate_prize_for_date(datetime.date.today() - datetime.timedelta(days=1))
-    stats_text = (f"Bot Statistics\n\nTotal Users: `{total_users}`\nToday's Tickets Sold (for tomorrow's draw): `{todays_total_tickets_sold}`\n"
-                  f"Today's *Potential* Prize Pool (for tomorrow's draw): `{potential_prize_for_tomorrows_draw:.2f} USDT`\n"
-                  f"Prize for *Today's* Draw (from yesterday's sales): `{prize_for_todays_draw:.2f} USDT`\n"
-                  f"Pending Payments (Admin Verification): `{pending_count}`")
+    logger.debug("HANDLER_ADMIN: stats_command invoked.")
+    if not update.message: return # Should be caught by admin_only if no user, but good practice
+
+    total_users = await get_total_users_count()
+    todays_total_tickets_sold = await get_total_tickets_for_date(datetime.date.today())
+    pending_count = len(pending_payments)
+    potential_prize_for_tomorrows_draw = await calculate_prize_for_date(datetime.date.today()) # Based on today's sales for tomorrow
+    prize_for_todays_draw = await calculate_prize_for_date(datetime.date.today() - datetime.timedelta(days=1)) # Based on yesterday's sales for today
+
+    stats_text = (
+        f"📊 **TrustWin Bot Statistics** 📊\n\n"
+        f"👤 Total Users: `{total_users}`\n"
+        f"🎟️ Today's Tickets Sold (for tomorrow's draw): `{todays_total_tickets_sold}`\n"
+        f"💰 Today's *Potential* Prize Pool (for tomorrow's draw): `{potential_prize_for_tomorrows_draw:.2f} USDT`\n"
+        f"🏆 Prize for *Today's* Draw (from yesterday's sales): `{prize_for_todays_draw:.2f} USDT`\n"
+        f"⏳ Pending Payments (Admin Verification): `{pending_count}`"
+    )
     await update.message.reply_text(stats_text, parse_mode=ParseMode.MARKDOWN)
+    logger.info("Admin stats displayed.")
 
 @admin_only
 async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.debug("HANDLER_ADMIN: users_command invoked.")
     if not update.message: return
-    all_user_ids = await get_all_user_telegram_ids();
-    if not all_user_ids: await update.message.reply_text("No users found."); return
-    user_list_text = "Active Users\n\n"; display_limit = 50; limited_user_ids = all_user_ids[:display_limit]
-    if len(all_user_ids) > display_limit: user_list_text += f"Listing first {display_limit} of {len(all_user_ids)} users:\n"
+
+    all_user_ids = await get_all_user_telegram_ids()
+    if not all_user_ids:
+        await update.message.reply_text("No users found in the database.")
+        return
+
+    user_list_text = "👥 **Active Users List** 👥\n\n"
+    display_limit = 50 
+    limited_user_ids = all_user_ids[:display_limit]
+
+    if len(all_user_ids) > display_limit:
+        user_list_text += f"Displaying first {display_limit} of {len(all_user_ids)} total users:\n"
+    
     if limited_user_ids:
-        user_details_response = supabase.from_('users').select('telegram_id, username, first_name').in_('telegram_id', limited_user_ids).execute()
-        user_details = user_details_response.data if user_details_response.data else []
-        for user_data in user_details:
-            name = user_data.get('first_name', 'N/A'); username_str = user_data.get('username'); user_id = user_data.get('telegram_id')
-            user_list_text += f"- {name} (@{username_str or 'N/A'}) [ID: `{user_id}`]\n"
-    else: user_list_text += "No users to list details for.\n"
+        # Fetch details for the limited list
+        # This assumes users table has telegram_id, username, first_name
+        users_details_response = supabase.from_('users').select('telegram_id, username, first_name').in_('telegram_id', limited_user_ids).execute()
+        
+        if users_details_response.data:
+            for i, user_data in enumerate(users_details_response.data):
+                name = user_data.get('first_name', 'N/A')
+                username_str = user_data.get('username')
+                user_id = user_data.get('telegram_id')
+                user_list_text += f"{i+1}. {name} (@{username_str or 'N/A'}) [ID: `{user_id}`]\n"
+        else:
+            user_list_text += "Could not fetch user details for the listed IDs.\n"
+    else:
+        user_list_text += "No users to list details for (this should not happen if all_user_ids is not empty).\n"
+        
     await update.message.reply_text(user_list_text, parse_mode=ParseMode.MARKDOWN)
+    logger.info(f"Admin users list displayed (limit {display_limit}).")
+
 
 @admin_only
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.debug("HANDLER_ADMIN: broadcast_command invoked.")
     if not update.message or not context.args:
-        if update.message: await update.message.reply_text("Usage: `/broadcast <message>`"); return
-    message_text = " ".join(context.args); all_user_ids = await get_all_user_telegram_ids()
+        if update.message:
+            await update.message.reply_text("Usage: `/broadcast <your message text here>`")
+        return
+
+    message_text = " ".join(context.args)
+    all_user_ids = await get_all_user_telegram_ids()
+
     if not all_user_ids:
-        if update.message: await update.message.reply_text("No users to broadcast to."); return
-    if update.message: await update.message.reply_text(f"Starting broadcast to {len(all_user_ids)} users...")
-    await broadcast_message_to_users_list(context, all_user_ids, message_text)
-    if update.message: await update.message.reply_text("Broadcast attempt finished. Check logs.")
+        if update.message:
+            await update.message.reply_text("No users found to broadcast the message to.")
+        return
+
+    if update.message:
+        await update.message.reply_text(f"📢 Starting broadcast of your message to {len(all_user_ids)} users...")
+    
+    # Perform the broadcast
+    await broadcast_message_to_users_list(context, all_user_ids, message_text) # Assuming Markdown for broadcasts by default
+    
+    if update.message:
+        await update.message.reply_text("Broadcast attempt finished. Please check the bot logs for details on sent/failed messages.")
+    logger.info(f"Admin initiated broadcast to {len(all_user_ids)} users.")
+
 
 @admin_only
 async def confirm_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.debug("HANDLER_ADMIN: confirm_payment_command invoked.")
     if not update.message or not context.args:
-        if update.message: await update.message.reply_text("Usage: `/confirm_payment <user_id>`"); return
-    try: user_to_confirm_id = int(context.args[0])
+        if update.message:
+            await update.message.reply_text("Usage: `/confirm_payment <user_id>`")
+        return
+
+    try:
+        user_to_confirm_id = int(context.args[0])
     except ValueError:
-        if update.message: await update.message.reply_text("Invalid user ID."); return
+        if update.message:
+            await update.message.reply_text("Invalid User ID format. Please provide a numeric User ID.")
+        return
+    
+    logger.info(f"Admin attempts to confirm payment for user ID: {user_to_confirm_id}")
+
     if user_to_confirm_id not in pending_payments:
-        if update.message: await update.message.reply_text(f"No pending payment for user ID `{user_to_confirm_id}`."); return
-    payment_info = pending_payments.pop(user_to_confirm_id)
-    claimed_payment_amount_by_user = payment_info['amount_paid']; num_tickets_purchased = payment_info['num_tickets']
-    original_message_id = payment_info['message_id']; original_chat_id = payment_info['chat_id']
+        if update.message:
+            await update.message.reply_text(f"No pending payment found for User ID `{user_to_confirm_id}`. It might have already been processed or was never claimed.")
+        logger.warning(f"No pending payment for user {user_to_confirm_id} found by admin.")
+        return
+
+    payment_info = pending_payments.pop(user_to_confirm_id) # Remove from pending
+    claimed_payment_amount_by_user = payment_info['amount_paid']
+    num_tickets_purchased = payment_info['num_tickets']
+    original_message_id = payment_info['message_id']
+    original_chat_id = payment_info['chat_id'] # This is the user's chat_id
+
+    logger.info(f"Processing payment confirmation for user {user_to_confirm_id}: {num_tickets_purchased} tickets, {claimed_payment_amount_by_user:.2f} USDT.")
+
+    # Increment tickets in DB
     if not await increment_daily_tickets_for_user(user_to_confirm_id, num_tickets_purchased):
-        logger.error(f"Failed to increment tickets for {user_to_confirm_id} (admin confirm).")
-        pending_payments[user_to_confirm_id] = payment_info # Put back
-        if update.message: await update.message.reply_text(f"Error incrementing tickets for {user_to_confirm_id}. Payment REVERTED. Check logs."); return
+        logger.error(f"Failed to increment tickets in DB for {user_to_confirm_id} after admin confirmation. Reverting pending payment.")
+        pending_payments[user_to_confirm_id] = payment_info # Put it back if DB operation failed
+        if update.message:
+            await update.message.reply_text(f"❌ Error: Could not increment tickets for User ID `{user_to_confirm_id}` in the database. The payment claim has been reverted to pending. Please check logs and try again.")
+        return
+
+    # Handle referral bonus
     referred_user_data = await get_user(user_to_confirm_id)
     if referred_user_data and referred_user_data.get('referrer_telegram_id'):
         referrer_id = referred_user_data['referrer_telegram_id']
-        value_of_tickets_purchased = num_tickets_purchased * TICKET_PRICE_USDT
+        value_of_tickets_purchased = num_tickets_purchased * TICKET_PRICE_USDT # Base for referral
         referral_bonus = value_of_tickets_purchased * REFERRAL_PERCENT
+        
         if referral_bonus > 0:
+            logger.info(f"Referral bonus of {referral_bonus:.2f} USDT due to referrer {referrer_id} for user {user_to_confirm_id}'s purchase.")
+            # Simulate sending USDT to referrer
             await simulate_send_usdt(f"Referrer ID: {referrer_id}", referral_bonus, "Referral Bonus")
             try:
                 referred_user_name = referred_user_data.get('first_name', f'User {user_to_confirm_id}')
-                await context.bot.send_message(chat_id=referrer_id, text=f"Referral Bonus!\n\nYou earned *{referral_bonus:.2f} USDT* as {referred_user_name} bought {num_tickets_purchased} ticket(s)!", parse_mode=ParseMode.MARKDOWN)
-                logger.info(f"Notified referrer {referrer_id} of {referral_bonus:.2f} USDT bonus from {user_to_confirm_id}")
-            except Exception as e: logger.warning(f"Could not notify referrer {referrer_id} about bonus: {e}")
+                await context.bot.send_message(
+                    chat_id=referrer_id, 
+                    text=(f"🎉 Referral Bonus! 🎉\n\n"
+                          f"You earned *{referral_bonus:.2f} USDT* because your referral, {referred_user_name}, "
+                          f"bought {num_tickets_purchased} ticket(s)!"),
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                logger.info(f"Notified referrer {referrer_id} of {referral_bonus:.2f} USDT bonus from {user_to_confirm_id}'s purchase.")
+            except Exception as e:
+                logger.warning(f"Could not notify referrer {referrer_id} about their bonus: {e}")
+
+    # Notify the user
     try:
+        # Get user's total tickets for today to display
         user_tickets_res = supabase.from_('daily_tickets').select('count').eq('telegram_id', user_to_confirm_id).eq('date', datetime.date.today().isoformat()).single().execute()
-        user_todays_total_tickets = user_tickets_res.data['count'] if user_tickets_res.data and isinstance(user_tickets_res.data.get('count'), int) else 0
-        confirmation_text = (f"Your payment for {num_tickets_purchased} ticket(s) ({claimed_payment_amount_by_user:.2f} USDT) is confirmed!\n"
-                             f"You now have *{user_todays_total_tickets}* ticket(s) for today's draw! Good luck!")
-        try: await context.bot.edit_message_text(chat_id=original_chat_id, message_id=original_message_id, text=confirmation_text, parse_mode=ParseMode.MARKDOWN)
+        user_todays_total_tickets = 0
+        if user_tickets_res.data and isinstance(user_tickets_res.data.get('count'), int) :
+             user_todays_total_tickets = user_tickets_res.data['count']
+        else: # If no entry or count is not int, means this might be their first confirmed tickets for the day or an issue.
+             # If increment_daily_tickets_for_user was successful, they should have at least num_tickets_purchased.
+             logger.warning(f"Could not retrieve total daily tickets for user {user_to_confirm_id} after confirmation, or count was not int. Response: {user_tickets_res.data}")
+             # Fallback to at least the number just purchased if RPC worked.
+             # This part of the logic in original code could be problematic if 'count' is not directly returned or RPC handles it.
+             # Assuming increment_daily_tickets_for_user has correctly set the count.
+             # For simplicity, we can just state the purchased ones.
+             user_todays_total_tickets = num_tickets_purchased # Or re-fetch if necessary, but increment_daily_ticket should be source of truth.
+             # Better: The RPC in Supabase should ideally return the new total count.
+             # If not, we assume the `num_tickets_purchased` is what matters for this message.
+
+        confirmation_text_to_user = (
+            f"✅ Your payment for {num_tickets_purchased} ticket(s) ({claimed_payment_amount_by_user:.2f} USDT) is confirmed!\n"
+            f"You now have *{user_todays_total_tickets}* ticket(s) registered for today's draw! Good luck! 🍀"
+        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=original_chat_id, 
+                message_id=original_message_id, 
+                text=confirmation_text_to_user, 
+                parse_mode=ParseMode.MARKDOWN
+            )
+            logger.info(f"Edited original payment message for user {user_to_confirm_id} with confirmation.")
         except Exception as edit_e:
-             logger.warning(f"Failed to edit original payment msg for {user_to_confirm_id}: {edit_e}. Sending new.")
-             await context.bot.send_message(chat_id=user_to_confirm_id, text=confirmation_text, parse_mode=ParseMode.MARKDOWN)
-        logger.info(f"Payment confirmed for user {user_to_confirm_id}. {num_tickets_purchased} tickets added.")
-    except Exception as e: logger.error(f"Failed to notify user {user_to_confirm_id} about payment confirmation: {e}")
-    if update.message: await update.message.reply_text(f"Payment confirmed for user ID `{user_to_confirm_id}`. {num_tickets_purchased} tickets added.")
+            logger.warning(f"Failed to edit original payment message for {user_to_confirm_id}: {edit_e}. Sending a new message instead.")
+            await context.bot.send_message(
+                chat_id=user_to_confirm_id, # Send to user directly
+                text=confirmation_text_to_user, 
+                parse_mode=ParseMode.MARKDOWN
+            )
+        logger.info(f"Payment confirmed for user {user_to_confirm_id}. {num_tickets_purchased} tickets added to their name.")
+    except Exception as e:
+        logger.error(f"Failed to notify user {user_to_confirm_id} about payment confirmation: {e}")
+
+    if update.message:
+        await update.message.reply_text(f"✅ Payment confirmed successfully for User ID `{user_to_confirm_id}`. {num_tickets_purchased} tickets have been added.")
+
 
 @admin_only
 async def manual_winner_draw_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.debug("HANDLER_ADMIN: manual_winner_draw_command invoked.")
     if not update.message: return
-    await update.message.reply_text("Triggering manual winner draw for previous day...")
+
+    await update.message.reply_text("⏳ Triggering manual winner draw for the previous day's tickets...")
     yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    await perform_winner_draw(context, date_override=yesterday)
-    await update.message.reply_text("Manual winner draw process complete. Check logs.")
+    logger.info(f"Admin triggered manual draw for date: {yesterday.isoformat()}")
+    
+    await perform_winner_draw(context, date_override=yesterday) # Pass the context
+    
+    await update.message.reply_text("Manual winner draw process has been completed. Please check the bot logs for details.")
+    logger.info("Manual winner draw process finished via admin command.")
+
 
 # --- Scheduled Jobs ---
 async def perform_winner_draw(context: ContextTypes.DEFAULT_TYPE, date_override: datetime.date | None = None) -> None:
-    draw_date = date_override if date_override else datetime.date.today() - datetime.timedelta(days=1)
-    logger.info(f"Starting winner draw for tickets of: {draw_date.isoformat()}")
+    draw_date = date_override if date_override else (datetime.date.today() - datetime.timedelta(days=1))
+    logger.info(f"SCHEDULER: Starting winner draw process for tickets of date: {draw_date.isoformat()}")
+
     actual_prize_amount_for_draw = await calculate_prize_for_date(draw_date)
-    logger.info(f"Calculated prize for {draw_date.isoformat()}: {actual_prize_amount_for_draw:.2f} USDT")
+    logger.info(f"SCHEDULER: Calculated total prize for {draw_date.isoformat()} draw: {actual_prize_amount_for_draw:.2f} USDT")
+
     if actual_prize_amount_for_draw <= Decimal("0.00"):
-        logger.info(f"No prize pool for {draw_date.isoformat()}. No winner drawn.")
-        broadcast_text = (f"Daily Draw Results for {draw_date.isoformat()}\n\nNo tickets sold, no prize pool this draw.\nBuy tickets today for tomorrow's chance!")
+        logger.info(f"SCHEDULER: No prize pool available for {draw_date.isoformat()} (prize is {actual_prize_amount_for_draw:.2f} USDT). No winner will be drawn.")
+        broadcast_text_no_winner = (
+            f"🗓️ Daily Draw Results for {draw_date.isoformat()} 🗓️\n\n"
+            f"No tickets were sold for this date, so there was no prize pool for this draw.\n"
+            f"Don't miss out! Buy your tickets today for a chance to win in tomorrow's draw!"
+        )
         user_ids_to_notify = await get_all_user_telegram_ids()
-        if user_ids_to_notify: await broadcast_message_to_users_list(context, user_ids_to_notify, broadcast_text)
+        if user_ids_to_notify:
+            await broadcast_message_to_users_list(context, user_ids_to_notify, broadcast_text_no_winner)
         return
+
     ticket_entries_for_draw = await get_daily_ticket_entries_for_draw(draw_date)
     if not ticket_entries_for_draw:
-        logger.warning(f"Prize > 0 for {draw_date.isoformat()}, but no ticket entries found. Inconsistency. No winner declared.")
-        try: await context.bot.send_message(ADMIN_ID, f"WARNING: Inconsistency in draw for {draw_date.isoformat()}. Prize > 0 but no ticket entries. Investigate.")
-        except Exception as e: logger.error(f"Failed to send inconsistency warning to admin: {e}")
+        logger.warning(f"SCHEDULER: Prize pool is > 0 for {draw_date.isoformat()} ({actual_prize_amount_for_draw:.2f} USDT), but no ticket entries were found in the database. This indicates a potential inconsistency. No winner declared.")
+        try:
+            await context.bot.send_message(ADMIN_ID, f"⚠️ CRITICAL WARNING: Inconsistency in draw for {draw_date.isoformat()}. Prize pool was {actual_prize_amount_for_draw:.2f} USDT, but NO ticket entries found. Please investigate the `daily_tickets` table for this date.")
+        except Exception as e_admin_warn:
+            logger.error(f"Failed to send inconsistency warning to admin: {e_admin_warn}")
         return
+
+    # Create a weighted list of participants
     weighted_ticket_list = []
     for entry in ticket_entries_for_draw:
-        if entry.get('telegram_id') and isinstance(entry.get('count'), int) and entry['count'] > 0 :
+        # Ensure telegram_id is present and count is a positive integer
+        if entry.get('telegram_id') and isinstance(entry.get('count'), int) and entry['count'] > 0:
             weighted_ticket_list.extend([entry['telegram_id']] * entry['count'])
+    
     if not weighted_ticket_list:
-        logger.info(f"Ticket entries found for {draw_date.isoformat()}, but weighted list is empty. No winner declared.")
+        logger.info(f"SCHEDULER: Ticket entries were found for {draw_date.isoformat()}, but the weighted list is empty after processing (e.g., all counts were 0 or invalid). No winner can be declared.")
         return
-    winner_telegram_id = random.choice(weighted_ticket_list); winner_user_data = await get_user(winner_telegram_id)
-    winner_name = winner_user_data.get('first_name', f'User {winner_telegram_id}') if winner_user_data else f'User {winner_telegram_id}'
-    winner_username = winner_user_data.get('username', 'N/A') if winner_user_data else 'N/A'
-    await simulate_send_usdt(f"Winner ID: {winner_telegram_id}", actual_prize_amount_for_draw, "Winner Prize")
+
+    logger.debug(f"SCHEDULER: Total weighted entries for draw on {draw_date.isoformat()}: {len(weighted_ticket_list)}")
+    winner_telegram_id = random.choice(weighted_ticket_list)
+    winner_user_data = await get_user(winner_telegram_id) # Fetch winner's details for announcement
+
+    winner_name_display = f'User {winner_telegram_id}' # Default display name
+    winner_username_display = 'N/A'
+    if winner_user_data:
+        winner_name_display = winner_user_data.get('first_name', winner_name_display)
+        winner_username_display = winner_user_data.get('username', winner_username_display)
+    
+    logger.info(f"SCHEDULER: Winner selected for {draw_date.isoformat()}: User ID {winner_telegram_id} ({winner_name_display} @{winner_username_display})")
+
+    # Simulate sending USDT prize
+    await simulate_send_usdt(f"Winner ID: {winner_telegram_id}", actual_prize_amount_for_draw, "Winner Prize Payout")
+    
+    # Record the winner in the database
     await add_winner_record(winner_telegram_id, actual_prize_amount_for_draw, draw_date)
-    broadcast_text = (f"Daily Draw Results for {draw_date.isoformat()}\n\nWinner: *{winner_name}* (@{winner_username})!\n"
-                      f"Congratulations! You won *{actual_prize_amount_for_draw:.2f} USDT*!\n\nBuy tickets today for the next draw!")
+
+    # Announce the winner
+    broadcast_text_winner = (
+        f"🎉🏆 **Daily Draw Results for {draw_date.isoformat()}** 🏆🎉\n\n"
+        f"And the winner is... **{winner_name_display}** (@{winner_username_display})!\n\n"
+        f"Congratulations! You have won *{actual_prize_amount_for_draw:.2f} USDT*!\n\n"
+        f"Thank you to everyone who participated. Buy your tickets today for the next exciting draw!"
+    )
     user_ids_to_notify = await get_all_user_telegram_ids()
-    if user_ids_to_notify: await broadcast_message_to_users_list(context, user_ids_to_notify, broadcast_text, parse_mode=ParseMode.MARKDOWN)
-    logger.info(f"Winner {winner_telegram_id} drawn for {draw_date.isoformat()} with prize {actual_prize_amount_for_draw:.2f} USDT")
+    if user_ids_to_notify:
+        await broadcast_message_to_users_list(context, user_ids_to_notify, broadcast_text_winner, parse_mode=ParseMode.MARKDOWN)
+    
+    logger.info(f"SCHEDULER: Winner {winner_telegram_id} successfully processed and announced for {draw_date.isoformat()} with prize {actual_prize_amount_for_draw:.2f} USDT")
+
 
 async def send_daily_marketing_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("SCHEDULER: Starting send_daily_marketing_message_job.")
     message_content = await get_random_marketing_message_content()
-    if not message_content: logger.warning("No marketing messages in DB."); return
-    logger.info("Sending daily marketing message..."); user_ids = await get_all_user_telegram_ids()
-    if not user_ids: logger.info("No users for marketing message."); return
-    await broadcast_message_to_users_list(context, user_ids, message_content)
+    
+    if not message_content:
+        logger.warning("SCHEDULER: No marketing messages found in the database. Skipping daily marketing message.")
+        return
+
+    logger.info("SCHEDULER: Sending daily marketing message to all users...")
+    user_ids = await get_all_user_telegram_ids()
+    if not user_ids:
+        logger.info("SCHEDULER: No users found to send the marketing message to.")
+        return
+    
+    await broadcast_message_to_users_list(context, user_ids, message_content) # Assuming marketing messages are plain text or pre-formatted
+    logger.info("SCHEDULER: Daily marketing message job completed.")
+
 
 # --- Winners History Command ---
 async def winners_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.debug("HANDLER: winners_command invoked.")
     if not update.message: return
-    latest_real_winners = await get_latest_winners(limit=7); winners_list_text = "TrustWin Bot Latest Winners\n\n"
-    if not latest_real_winners: winners_list_text += "No winners yet! Be the first to win!\n"
+
+    latest_real_winners = await get_latest_winners(limit=7) # Fetch more for a good list
+    winners_list_text = "🏆 **TrustWin Bot - Latest Winners** 🏆\n\n"
+
+    if not latest_real_winners:
+        winners_list_text += "No winners recorded yet! Be the first to make history!\n"
     else:
         for i, winner_entry in enumerate(latest_real_winners):
-            win_date_str = str(winner_entry.get('win_date', 'Unknown Date'))
-            try: parsed_date = datetime.date.fromisoformat(win_date_str); win_date_display = parsed_date.strftime("%Y-%m-%d")
-            except ValueError: win_date_display = win_date_str
-            amount = Decimal(str(winner_entry.get('amount', '0'))).quantize(Decimal("0.01"))
+            win_date_str = str(winner_entry.get('win_date', 'Unknown Date')) # Ensure it's a string
+            try:
+                # Attempt to parse if it's ISO format, otherwise use as is
+                parsed_date = datetime.date.fromisoformat(win_date_str)
+                win_date_display = parsed_date.strftime("%Y-%m-%d") # Format for display
+            except ValueError:
+                win_date_display = win_date_str # Fallback if not ISO date string
+            
+            amount_str = str(winner_entry.get('amount', '0')) # Ensure it's a string before Decimal
+            amount = Decimal(amount_str).quantize(Decimal("0.01"))
+            
             user_info = winner_entry.get('user_info')
-            name = user_info.get('first_name', f"User {winner_entry.get('telegram_id')}") if user_info else f"User {winner_entry.get('telegram_id')}"
-            winners_list_text += f"{i+1}. Date: {win_date_display}: *{name}* won *{amount:.2f} USDT*\n"
+            name_display = f"User {winner_entry.get('telegram_id', 'Unknown ID')}" # Default
+            if user_info:
+                name_display = user_info.get('first_name', name_display)
+                # Optionally add username:  + (f" (@{user_info.get('username')})" if user_info.get('username') else "")
+            
+            winners_list_text += f"{i+1}. 🗓️ {win_date_display}: *{name_display}* won *{amount:.2f} USDT*\n"
+            
+    winners_list_text += "\nBuy a ticket today for your chance to be on this list!"
     await update.message.reply_text(winners_list_text, parse_mode=ParseMode.MARKDOWN)
+    logger.info("Winners list displayed.")
+
 
 # --- Error Handling ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
+    # Log the error before attempting to send to admin
+    logger.error(f"ERROR_HANDLER: Exception while handling an update: {context.error}", exc_info=context.error)
+    
     try:
-        error_summary = str(context.error)[:1000]; update_str = str(update) if isinstance(update, Update) else str(type(update)); update_summary = update_str[:1000]
-        error_message = f"Bot Error Alert!\n\nError Type: {type(context.error).__name__}\nError: {error_summary}\n\nUpdate Type: {type(update).__name__}\nUpdate Details: {update_summary}"
-        await context.bot.send_message(chat_id=ADMIN_ID, text=error_message)
-    except Exception as e_notify: logger.error(f"CRITICAL: Failed to send error notification to admin {ADMIN_ID}. Original error: {context.error}. Notification error: {e_notify}")
+        # Prepare a summary of the error and update for admin notification
+        error_summary = str(context.error)[:1000] # Limit length
+        
+        update_details_summary = "Update data not available or too complex."
+        if isinstance(update, Update) and update.effective_message:
+            update_details_summary = f"Message ID: {update.effective_message.message_id}, Chat ID: {update.effective_message.chat_id}, Text: '{str(update.effective_message.text)[:200]}'"
+        elif isinstance(update, Update) and update.callback_query:
+            update_details_summary = f"Callback Query ID: {update.callback_query.id}, Data: '{str(update.callback_query.data)[:200]}'"
+        elif isinstance(update, Update):
+             update_details_summary = str(update)[:1000]
+        else:
+             update_details_summary = str(type(update))[:1000]
+
+
+        error_message_to_admin = (
+            f"🚨 **Bot Error Alert!** 🚨\n\n"
+            f"Error Type: `{type(context.error).__name__}`\n"
+            f"Error: `{error_summary}`\n\n"
+            f"Update Type: `{type(update).__name__}`\n"
+            f"Update Details: `{update_details_summary}`\n\n"
+            f"Please check the bot logs for the full traceback."
+        )
+        if ADMIN_ID: # Ensure ADMIN_ID is set
+            await context.bot.send_message(chat_id=ADMIN_ID, text=error_message_to_admin, parse_mode=ParseMode.MARKDOWN)
+            logger.info(f"ERROR_HANDLER: Error notification sent to admin {ADMIN_ID}.")
+        else:
+            logger.warning("ERROR_HANDLER: ADMIN_ID not set. Cannot send error notification to admin.")
+
+    except Exception as e_notify:
+        logger.error(f"CRITICAL_ERROR_HANDLER: Failed to send error notification to admin {ADMIN_ID}. Original error: {context.error}. Notification attempt error: {e_notify}")
+
 
 # --- Main Function ---
 def main() -> None:
+    logger.info("STAGE MAIN_0: main() function started.")
     logger.info("Attempting to start TrustWin Bot...")
-    try: application = Application.builder().token(BOT_TOKEN).build(); logger.info("Telegram Application built.")
-    except Exception as e: logger.critical(f"FATAL: Failed to build Telegram App: {e}. Bot cannot start."); return
+    try:
+        application = Application.builder().token(BOT_TOKEN).build()
+        logger.info("STAGE MAIN_1: Telegram Application built successfully.")
+    except Exception as e:
+        logger.critical(f"FATAL: Failed to build Telegram Application: {e}. Bot cannot start. Exiting.")
+        exit(1)
+
     job_queue = application.job_queue
-    if not job_queue: logger.critical("FATAL: No job queue. Scheduled tasks cannot run. Bot cannot start reliably."); return
-    try: timezone = pytz.timezone(TIMEZONE_STR); logger.info(f"Scheduler timezone: {TIMEZONE_STR}")
-    except pytz.exceptions.UnknownTimeZoneError: logger.error(f"Unknown timezone: '{TIMEZONE_STR}'. Defaulting to UTC."); timezone = pytz.utc
+    if not job_queue:
+        logger.critical("FATAL: No job queue obtained from application. Scheduled tasks cannot run. Bot cannot start reliably. Exiting.")
+        exit(1)
+    logger.info("STAGE MAIN_2: Job queue obtained successfully.")
+
+    try:
+        timezone = pytz.timezone(TIMEZONE_STR)
+        logger.info(f"STAGE MAIN_3: Scheduler timezone set to: {TIMEZONE_STR} ({timezone})")
+    except pytz.exceptions.UnknownTimeZoneError:
+        logger.error(f"Unknown timezone: '{TIMEZONE_STR}'. Defaulting scheduler to UTC.")
+        timezone = pytz.utc # Fallback to UTC
+        logger.info(f"STAGE MAIN_3.1: Scheduler timezone defaulted to UTC.")
+
+    # Add handlers
+    logger.debug("STAGE MAIN_4: Adding command and callback handlers.")
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("buy", buy_command))
     application.add_handler(CommandHandler("winners", winners_command))
+    # Admin commands
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("users", users_command))
     application.add_handler(CommandHandler("broadcast", broadcast_command))
     application.add_handler(CommandHandler("confirm_payment", confirm_payment_command))
     application.add_handler(CommandHandler("trigger_draw", manual_winner_draw_command))
+    # Callback handlers
     application.add_handler(CallbackQueryHandler(paid_button_callback, pattern='^paid_'))
+    # Error handler
     application.add_error_handler(error_handler)
+    logger.info("STAGE MAIN_4.1: All handlers added.")
+
+    # Schedule jobs
+    logger.debug("STAGE MAIN_5: Scheduling daily jobs.")
+    # Daily winner draw at 00:01 (1 minute past midnight) in the configured timezone
     job_queue.run_daily(perform_winner_draw, time=datetime.time(hour=0, minute=1, second=0, tzinfo=timezone), name="daily_winner_draw")
     logger.info(f"Scheduled daily winner draw at 00:01 ({timezone}) for previous day's tickets.")
+    
+    # Daily marketing message at 09:00 in the configured timezone
     job_queue.run_daily(send_daily_marketing_message_job, time=datetime.time(hour=9, minute=0, second=0, tzinfo=timezone), name="daily_marketing_message")
     logger.info(f"Scheduled daily marketing message at 09:00 ({timezone}).")
-    logger.info("Bot is starting to poll for updates...")
-    try: application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except Exception as e: logger.critical(f"Bot polling failed critically: {e}. Bot has stopped.")
-    logger.info("Bot polling has ended.")
+    logger.info("STAGE MAIN_5.1: Daily jobs scheduled.")
+
+    logger.info("STAGE MAIN_FINAL: Bot is starting to poll for updates...")
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logger.critical(f"Bot polling failed critically: {e}. Bot has stopped.")
+        # Potentially exit here if polling fails at startup, though run_polling usually blocks until stop
+    
+    logger.info("Bot polling has ended (e.g., due to stop() call or unhandled critical error during polling).")
 
 if __name__ == '__main__':
+    logger.info("STAGE SCRIPT_EXEC: __name__ == '__main__', calling main().")
     main()
+    logger.info("STAGE SCRIPT_END: main() function finished or script is ending (e.g. after polling stops).")
