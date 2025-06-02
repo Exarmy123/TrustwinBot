@@ -5,7 +5,7 @@ import logging # logging को पहले इम्पोर्ट करे�
 import asyncio
 import random
 import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP # <--- YAHAN COMMA SAHI KIYA GAYA
 
 # from dotenv import load_dotenv # Uncomment if using a .env file locally
 
@@ -97,10 +97,6 @@ logger.info(f"Prize Pool Contribution Percent: {PRIZE_POOL_CONTRIBUTION_PERCENT*
 # --- Supabase Client ---
 logger.info("STAGE 6: Attempting to connect to Supabase.")
 
-# Logging the actual values being used for Supabase connection
-# Note: SUPABASE_KEY poora log karna sensitive ho sakta hai production mein,
-# par debugging ke liye key ka loaded hona check karna zaroori hai.
-# Agar SUPABASE_URL ya SUPABASE_KEY None hai, toh yeh yahan pata chal jayega.
 logger.debug(f"DEBUG STAGE 6 - SUPABASE_URL from env: '{SUPABASE_URL}' (Type: {type(SUPABASE_URL)})")
 if SUPABASE_KEY and len(SUPABASE_KEY) > 10:
     logger.debug(f"DEBUG STAGE 6 - SUPABASE_KEY from env: '{SUPABASE_KEY[:5]}...{SUPABASE_KEY[-5:]}' (Loaded: True, Type: {type(SUPABASE_KEY)})")
@@ -111,8 +107,6 @@ else:
 
 try:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        # Yeh check yahan bhi daal diya hai, just in case upar wala all() miss kar gaya
-        # ya environment variables baad mein None ho gaye (jo ki aam taur par nahi hota)
         logger.error("FATAL: SUPABASE_URL or SUPABASE_KEY is None before client creation. Exiting.")
         exit(1)
         
@@ -120,11 +114,14 @@ try:
     logger.info("STAGE 6.1: Successfully initialized Supabase client.")
 except Exception as e:
     logger.error(f"FATAL: Could not initialize Supabase client: {e}. Exiting.")
-    # Additional logging for URL specific errors
     if "Invalid URL" in str(e) and SUPABASE_URL:
-        logger.error(f"Details for Invalid URL: URL received by client was '{SUPABASE_URL}'")
+        logger.error(f"Details for Invalid URL: URL received by client may have been '{SUPABASE_URL}' but check client's internal parsing.")
     elif "Invalid URL" in str(e) and not SUPABASE_URL:
         logger.error("Details for Invalid URL: SUPABASE_URL was None or empty when client tried to use it.")
+    # Aapke logs ne specific error "URL received by client was 'gqlpxjrcumoquuhkuguf'" dikhaya tha.
+    # Yeh tab ho sakta hai jab key galat ho aur library URL ko galat parse kare.
+    if "gqlpxjrcumoquuhkuguf" in str(e) or (hasattr(e, 'args') and e.args and "gqlpxjrcumoquuhkuguf" in str(e.args[0])):
+         logger.error("Error details suggest URL was parsed as just the project ID. This often happens if the API Key is incorrect or missing, causing the client library to misinterpret the URL.")
     exit(1)
 
 # --- Global State (for pending payments - Simple in-memory approach) ---
@@ -140,12 +137,11 @@ async def get_user(telegram_id: int):
         logger.debug(f"DB: Get user {telegram_id} response: {response.data is not None}")
         return response.data
     except Exception as e:
-        # Supabase-py v1 vs v2 error checking for "0 rows" on .single()
-        if hasattr(e, 'message') and "PGRST116" in e.message and "0 rows" in e.message: # older supabase-py
+        if hasattr(e, 'message') and "PGRST116" in e.message and "0 rows" in e.message: 
             logger.debug(f"Supabase: User {telegram_id} not found (0 rows for single() - old lib).")
-        elif hasattr(e, 'code') and e.code == 'PGRST116': # supabase-py v1.x
+        elif hasattr(e, 'code') and e.code == 'PGRST116': 
             logger.debug(f"Supabase: User {telegram_id} not found (PGRST116 for single() - v1.x).")
-        elif hasattr(e, 'details') and isinstance(e.details, str) and 'PGRST116' in e.details: # supabase-py v2.x
+        elif hasattr(e, 'details') and isinstance(e.details, str) and 'PGRST116' in e.details: 
              logger.debug(f"Supabase: User {telegram_id} not found (PGRST116 from details for single() - v2.x).")
         else:
             logger.error(f"Supabase error fetching user {telegram_id}: {type(e)} - {e}")
@@ -182,7 +178,6 @@ async def create_user(telegram_id: int, username: str | None, first_name: str | 
         return None
 
 async def increment_daily_tickets_for_user(telegram_id: int, num_tickets: int = 1):
-    """Increment ticket count for a user for today's date using RPC."""
     logger.debug(f"DB: Attempting to increment {num_tickets} tickets for user {telegram_id} via RPC.")
     if num_tickets <= 0:
         logger.warning(f"Attempted to increment 0 or negative tickets for user {telegram_id}.")
@@ -208,9 +203,7 @@ async def increment_daily_tickets_for_user(telegram_id: int, num_tickets: int = 
         if hasattr(e, 'hint'): logger.error(f"RPC Exception hint: {getattr(e, 'hint', 'N/A')}")
         return False
 
-
 async def get_total_tickets_for_date(date_obj: datetime.date) -> int:
-    """Get the total number of tickets sold on a specific date."""
     logger.debug(f"DB: Getting total tickets for date {date_obj.isoformat()}")
     try:
         response = supabase.from_('daily_tickets').select('count').eq('date', date_obj.isoformat()).execute()
@@ -226,7 +219,6 @@ async def get_total_tickets_for_date(date_obj: datetime.date) -> int:
         return 0
 
 async def get_daily_ticket_entries_for_draw(date_obj: datetime.date) -> list:
-    """Get all individual ticket entries (telegram_id, count) for a specific date."""
     logger.debug(f"DB: Getting daily ticket entries for draw on {date_obj.isoformat()}")
     try:
         response = supabase.from_('daily_tickets').select('telegram_id, count').eq('date', date_obj.isoformat()).execute()
@@ -237,7 +229,6 @@ async def get_daily_ticket_entries_for_draw(date_obj: datetime.date) -> list:
         return []
 
 async def add_winner_record(telegram_id: int, amount: Decimal, win_date: datetime.date):
-    """Add a winner entry to the database."""
     logger.debug(f"DB: Adding winner record for {telegram_id}, amount {amount}, date {win_date.isoformat()}")
     try:
         data_to_insert = {
@@ -257,7 +248,6 @@ async def add_winner_record(telegram_id: int, amount: Decimal, win_date: datetim
         return None
 
 async def get_latest_winners(limit: int = 7):
-    """Fetch the latest winners from the database, including user info."""
     logger.debug(f"DB: Getting latest {limit} winners.")
     try:
         winners_response = supabase.from_('winners').select('telegram_id, amount, win_date').order('win_date', desc=True).limit(limit).execute()
@@ -284,7 +274,6 @@ async def get_latest_winners(limit: int = 7):
         return []
 
 async def get_all_user_telegram_ids() -> list[int]:
-    """Fetch all user telegram_ids for broadcasting."""
     logger.debug("DB: Getting all user telegram_ids.")
     try:
         response = supabase.from_('users').select('telegram_id').execute()
@@ -296,7 +285,6 @@ async def get_all_user_telegram_ids() -> list[int]:
         return []
 
 async def get_total_users_count() -> int:
-    """Get the total count of users."""
     logger.debug("DB: Getting total users count.")
     try:
         response = supabase.from_('users').select('telegram_id', count='exact').limit(0).execute()
@@ -308,7 +296,6 @@ async def get_total_users_count() -> int:
         return 0
 
 async def get_random_marketing_message_content() -> str | None:
-    """Fetch a random marketing message from the database."""
     logger.debug("DB: Getting random marketing message.")
     try:
         response = supabase.from_('messages').select('content').eq('type', 'marketing').execute()
@@ -327,9 +314,7 @@ async def get_random_marketing_message_content() -> str | None:
         logger.error(f"Supabase error fetching marketing message: {e}")
         return None
 
-# --- Helper: Calculate Dynamic Prize ---
 async def calculate_prize_for_date(date_obj: datetime.date) -> Decimal:
-    """Calculates the winner prize for a given date based on ticket sales."""
     logger.debug(f"CALC: Calculating prize for date {date_obj.isoformat()}")
     total_tickets_sold_on_date = await get_total_tickets_for_date(date_obj)
     logger.info(f"Total tickets sold on {date_obj.isoformat()} for prize calculation: {total_tickets_sold_on_date}")
@@ -342,7 +327,6 @@ async def calculate_prize_for_date(date_obj: datetime.date) -> Decimal:
     logger.debug(f"CALC: Prize for {date_obj.isoformat()} calculated: {final_prize} USDT")
     return final_prize
 
-# --- Helper Functions: USDT Simulation & Broadcast ---
 async def simulate_send_usdt(recipient_info: str, amount: Decimal, transaction_type: str):
     logger.info(f"SIMULATING USDT SEND: Type='{transaction_type}', Recipient='{recipient_info}', Amount='{amount:.2f} USDT'")
     await asyncio.sleep(random.uniform(0.5, 1.2)) 
@@ -373,7 +357,6 @@ async def broadcast_message_to_users_list(context: ContextTypes.DEFAULT_TYPE, us
     
     logger.info(f"BROADCAST: Attempt finished. Sent: {sent_count}, Failed: {failed_count} out of {len(user_ids)} users.")
 
-# --- Handlers ---
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER: start_command invoked.")
     user = update.effective_user
@@ -456,7 +439,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         logger.warning("Start command invoked without a message attribute in update. Cannot send reply.")
 
-
 async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER: buy_command invoked.")
     user = update.effective_user
@@ -495,7 +477,6 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.debug(f"Buy instruction message sent to {telegram_id}")
     else:
         logger.warning("Buy command invoked without message attribute. Cannot send reply.")
-
 
 async def paid_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER: paid_button_callback invoked.")
@@ -591,7 +572,6 @@ async def paid_button_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         except Exception as e_user_notify_fallback:
             logger.error(f"Also failed to send direct fallback notification to user {telegram_id}: {e_user_notify_fallback}")
 
-# --- Admin Decorator ---
 def admin_only(handler):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug(f"ADMIN_DECORATOR: Checking access for handler {handler.__name__}")
@@ -607,7 +587,6 @@ def admin_only(handler):
         await handler(update, context)
     return wrapper
 
-# --- Admin Commands ---
 @admin_only
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER_ADMIN: stats_command invoked.")
@@ -664,7 +643,6 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(user_list_text, parse_mode=ParseMode.MARKDOWN)
     logger.info(f"Admin users list displayed (limit {display_limit}).")
 
-
 @admin_only
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER_ADMIN: broadcast_command invoked.")
@@ -689,7 +667,6 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if update.message:
         await update.message.reply_text("Broadcast attempt finished. Please check the bot logs for details on sent/failed messages.")
     logger.info(f"Admin initiated broadcast to {len(all_user_ids)} users.")
-
 
 @admin_only
 async def confirm_payment_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -785,7 +762,6 @@ async def confirm_payment_command(update: Update, context: ContextTypes.DEFAULT_
     if update.message:
         await update.message.reply_text(f"✅ Payment confirmed successfully for User ID `{user_to_confirm_id}`. {num_tickets_purchased} tickets have been added.")
 
-
 @admin_only
 async def manual_winner_draw_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER_ADMIN: manual_winner_draw_command invoked.")
@@ -800,8 +776,6 @@ async def manual_winner_draw_command(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text("Manual winner draw process has been completed. Please check the bot logs for details.")
     logger.info("Manual winner draw process finished via admin command.")
 
-
-# --- Scheduled Jobs ---
 async def perform_winner_draw(context: ContextTypes.DEFAULT_TYPE, date_override: datetime.date | None = None) -> None:
     draw_date = date_override if date_override else (datetime.date.today() - datetime.timedelta(days=1))
     logger.info(f"SCHEDULER: Starting winner draw process for tickets of date: {draw_date.isoformat()}")
@@ -867,7 +841,6 @@ async def perform_winner_draw(context: ContextTypes.DEFAULT_TYPE, date_override:
     
     logger.info(f"SCHEDULER: Winner {winner_telegram_id} successfully processed and announced for {draw_date.isoformat()} with prize {actual_prize_amount_for_draw:.2f} USDT")
 
-
 async def send_daily_marketing_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("SCHEDULER: Starting send_daily_marketing_message_job.")
     message_content = await get_random_marketing_message_content()
@@ -885,8 +858,6 @@ async def send_daily_marketing_message_job(context: ContextTypes.DEFAULT_TYPE) -
     await broadcast_message_to_users_list(context, user_ids, message_content) 
     logger.info("SCHEDULER: Daily marketing message job completed.")
 
-
-# --- Winners History Command ---
 async def winners_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.debug("HANDLER: winners_command invoked.")
     if not update.message: return
@@ -919,8 +890,6 @@ async def winners_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(winners_list_text, parse_mode=ParseMode.MARKDOWN)
     logger.info("Winners list displayed.")
 
-
-# --- Error Handling ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"ERROR_HANDLER: Exception while handling an update: {context.error}", exc_info=context.error)
     
@@ -954,8 +923,6 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e_notify:
         logger.error(f"CRITICAL_ERROR_HANDLER: Failed to send error notification to admin {ADMIN_ID}. Original error: {context.error}. Notification attempt error: {e_notify}")
 
-
-# --- Main Function ---
 def main() -> None:
     logger.info("STAGE MAIN_0: main() function started.")
     logger.info("Attempting to start TrustWin Bot...")
