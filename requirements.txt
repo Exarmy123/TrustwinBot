@@ -1,7 +1,4 @@
 # requirements.txt
-
+supabase>=2.0.0 # YA SIRF supabase
 python-telegram-bot[ext]>=20.0
-supabase>=2.0.0  # <--- YEH CHANGE KAREIN
 pytz
-# Agar python-dotenv use kar rahe hain toh:
-# python-dotenv
