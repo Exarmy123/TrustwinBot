@@ -1,4 +1,6 @@
-python-dotenv
-python-telegram-bot==20.0
-supabase
+python-telegram-bot==20.7
+apscheduler
 requests
+python-dotenv
+asyncio
+supabase
