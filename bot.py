@@ -354,7 +354,14 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def paid_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query;
-    if not query or not query.message: logger.error("paid_button_callback: invalid query or no message."); if query: await query.answer("Error.", show_alert=True); return
+        # यह लाइन (और इसके नीचे की कुछ लाइनें) पुरानी लाइन 357 की जगह लेंगी
+    if not query or not query.message:
+        logger.error("paid_button_callback: invalid query or no message.")
+        if query:  # यह सुनिश्चित करने के लिए कि query None नहीं है
+            await query.answer("Error processing your request.", show_alert=True)
+        return # फंक्शन से बाहर निकलें
+
+    # इसके बाद आपका user = query.effective_user; वाला कोड शुरू होगा
     user = query.effective_user;
     if not user: logger.error("paid_button_callback: no effective_user."); await query.answer("Error: No user.", show_alert=True); return
     telegram_id = user.id; data = query.data
